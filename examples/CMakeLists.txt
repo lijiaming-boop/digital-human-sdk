@@ -76,4 +76,15 @@ if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/landmark_test.cpp")
     )
 endif()
 
+# 9. 构建 FaceAligner 测试程序
+if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/face_aligner_test.cpp")
+    add_executable(face_aligner_test face_aligner_test.cpp)
+
+    target_link_libraries(face_aligner_test PRIVATE digital_human_core)
+
+    set_target_properties(face_aligner_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
 message(STATUS "Configured example targets.")
