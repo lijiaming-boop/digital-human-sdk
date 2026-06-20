@@ -87,4 +87,26 @@ if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/face_aligner_test.cpp")
     )
 endif()
 
+# 10. 构建 FaceMaskGenerator 测试程序
+if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/face_mask_generator_test.cpp")
+    add_executable(face_mask_generator_test face_mask_generator_test.cpp)
+
+    target_link_libraries(face_mask_generator_test PRIVATE digital_human_core)
+
+    set_target_properties(face_mask_generator_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
+# 11. 构建 AudioLoader 测试程序
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/audio_loader_test.cpp")
+    add_executable(audio_loader_test audio_loader_test.cpp)
+
+    target_link_libraries(audio_loader_test PRIVATE digital_human_core)
+
+    set_target_properties(audio_loader_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
 message(STATUS "Configured example targets.")
