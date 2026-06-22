@@ -3,7 +3,6 @@
 #include <thread>
 #include <atomic>
 #include <chrono>
-#include <numeric>
 #include "audio/audio_ring_buffer.h"
 
 using namespace digital_human::audio;
@@ -16,13 +15,13 @@ int main() {
     // ==========================================
     std::cout << "\n[Test 1] Basic write/read..." << std::endl;
     {
-        RingBuffer<int> rb(16);
+        RingBuffer rb(16);
 
-        int src[10] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+        float src[10] = {0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f};
         size_t written = rb.write(src, 10);
         bool writeOk = (written == 10);
 
-        int dst[10] = {0};
+        float dst[10] = {0};
         size_t read = rb.read(dst, 10);
         bool readOk = (read == 10);
 
@@ -41,26 +40,22 @@ int main() {
     // ==========================================
     std::cout << "\n[Test 2] Wrap-around..." << std::endl;
     {
-        RingBuffer<int> rb(8);
+        RingBuffer rb(8);
 
-        // Write 5, read 3 → leaves 2 at positions 3,4
-        int src1[5] = {10, 20, 30, 40, 50};
+        float src1[5] = {10.0f, 20.0f, 30.0f, 40.0f, 50.0f};
         rb.write(src1, 5);
-        int tmp[3];
+        float tmp[3];
         rb.read(tmp, 3);
 
-        // Now write 6 more → wraps around
-        int src2[6] = {60, 70, 80, 90, 100, 110};
+        float src2[6] = {60.0f, 70.0f, 80.0f, 90.0f, 100.0f, 110.0f};
         size_t written = rb.write(src2, 6);
         bool writeOk = (written == 6);
 
-        // Read all 8 elements
-        int dst[8];
+        float dst[8];
         size_t read = rb.read(dst, 8);
         bool readOk = (read == 8);
 
-        // Expected: [40, 50, 60, 70, 80, 90, 100, 110]
-        int expected[8] = {40, 50, 60, 70, 80, 90, 100, 110};
+        float expected[8] = {40.0f, 50.0f, 60.0f, 70.0f, 80.0f, 90.0f, 100.0f, 110.0f};
         bool dataOk = true;
         for (int i = 0; i < 8; i++) {
             if (dst[i] != expected[i]) dataOk = false;
@@ -76,7 +71,7 @@ int main() {
     // ==========================================
     std::cout << "\n[Test 3] Empty / Full states..." << std::endl;
     {
-        RingBuffer<int> rb(4);
+        RingBuffer rb(4);
 
         bool initEmpty = rb.empty();
         bool initNotFull = !rb.full();
@@ -88,7 +83,7 @@ int main() {
         std::cout << (initAvailRead ? "  [PASS]" : "  [FAIL]") << " availableRead() = 0" << std::endl;
         std::cout << (initAvailWrite ? "  [PASS]" : "  [FAIL]") << " availableWrite() = 4" << std::endl;
 
-        int src[4] = {1, 2, 3, 4};
+        float src[4] = {1.0f, 2.0f, 3.0f, 4.0f};
         rb.write(src, 4);
 
         bool nowFull = rb.full();
@@ -107,11 +102,11 @@ int main() {
     // ==========================================
     std::cout << "\n[Test 4] Write to full buffer..." << std::endl;
     {
-        RingBuffer<int> rb(4);
-        int src[4] = {1, 2, 3, 4};
+        RingBuffer rb(4);
+        float src[4] = {1.0f, 2.0f, 3.0f, 4.0f};
         rb.write(src, 4);
 
-        int extra[2] = {5, 6};
+        float extra[2] = {5.0f, 6.0f};
         size_t written = rb.write(extra, 2);
 
         bool writeBlocked = (written == 0);
@@ -124,8 +119,8 @@ int main() {
     // ==========================================
     std::cout << "\n[Test 5] Read from empty..." << std::endl;
     {
-        RingBuffer<int> rb(4);
-        int dst[4];
+        RingBuffer rb(4);
+        float dst[4];
         size_t read = rb.read(dst, 4);
 
         bool readBlocked = (read == 0);
@@ -138,18 +133,17 @@ int main() {
     // ==========================================
     std::cout << "\n[Test 6] skip()..." << std::endl;
     {
-        RingBuffer<int> rb(8);
-        int src[8] = {0, 1, 2, 3, 4, 5, 6, 7};
+        RingBuffer rb(8);
+        float src[8] = {0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f};
         rb.write(src, 8);
 
         size_t skipped = rb.skip(3);
         bool skipOk = (skipped == 3);
         bool availOk = (rb.availableRead() == 5);
 
-        // Remaining should be [3, 4, 5, 6, 7]
-        int dst[5];
+        float dst[5];
         rb.read(dst, 5);
-        bool dataOk = (dst[0] == 3 && dst[4] == 7);
+        bool dataOk = (dst[0] == 3.0f && dst[4] == 7.0f);
 
         std::cout << (skipOk ? "  [PASS]" : "  [FAIL]") << " Skipped 3" << std::endl;
         std::cout << (availOk ? "  [PASS]" : "  [FAIL]") << " 5 remaining" << std::endl;
@@ -161,8 +155,8 @@ int main() {
     // ==========================================
     std::cout << "\n[Test 7] reset()..." << std::endl;
     {
-        RingBuffer<int> rb(4);
-        int src[3] = {1, 2, 3};
+        RingBuffer rb(4);
+        float src[3] = {1.0f, 2.0f, 3.0f};
         rb.write(src, 3);
 
         rb.reset();
@@ -181,7 +175,7 @@ int main() {
     // ==========================================
     std::cout << "\n[Test 8] capacity()..." << std::endl;
     {
-        RingBuffer<int> rb(1024);
+        RingBuffer rb(1024);
         bool capOk = (rb.capacity() == 1024);
         std::cout << (capOk ? "  [PASS]" : "  [FAIL]") << " capacity = 1024" << std::endl;
     }
@@ -191,12 +185,11 @@ int main() {
     // ==========================================
     std::cout << "\n[Test 9] Partial write..." << std::endl;
     {
-        RingBuffer<int> rb(4);
-        int src1[3] = {1, 2, 3};
+        RingBuffer rb(4);
+        float src1[3] = {1.0f, 2.0f, 3.0f};
         rb.write(src1, 3);
 
-        // Only 1 space left, try to write 5
-        int src2[5] = {4, 5, 6, 7, 8};
+        float src2[5] = {4.0f, 5.0f, 6.0f, 7.0f, 8.0f};
         size_t written = rb.write(src2, 5);
 
         bool partialOk = (written == 1);
@@ -214,14 +207,14 @@ int main() {
     {
         const size_t capacity = 1024;
         const int totalItems = 100000;
-        RingBuffer<int> rb(capacity);
+        RingBuffer rb(capacity);
 
         std::atomic<bool> producerDone{false};
         std::atomic<int> producedCount{0};
         std::atomic<int> consumedCount{0};
-        std::vector<int> consumed(totalItems, -1);
+        std::vector<float> consumed(totalItems, -1.0f);
 
-        // Producer: write sequential numbers
+        // Producer: write sequential floats
         std::thread producer([&]() {
             int val = 0;
             while (val < totalItems) {
@@ -229,9 +222,8 @@ int main() {
                 if (avail > 0) {
                     size_t n = std::min(avail, size_t(50));
                     n = std::min(n, size_t(totalItems - val));
-                    // Prepare batch
-                    std::vector<int> batch(n);
-                    for (size_t i = 0; i < n; i++) batch[i] = val++;
+                    std::vector<float> batch(n);
+                    for (size_t i = 0; i < n; i++) batch[i] = static_cast<float>(val++);
                     size_t written = rb.write(batch.data(), n);
                     producedCount.fetch_add(static_cast<int>(written));
                 } else {
@@ -243,12 +235,11 @@ int main() {
 
         // Consumer: read and verify sequential
         std::thread consumer([&]() {
-            int expectedVal = 0;
             while (!producerDone.load() || rb.availableRead() > 0) {
                 size_t avail = rb.availableRead();
                 if (avail > 0) {
                     size_t n = std::min(avail, size_t(50));
-                    std::vector<int> batch(n);
+                    std::vector<float> batch(n);
                     size_t read = rb.read(batch.data(), n);
                     for (size_t i = 0; i < read; i++) {
                         int idx = consumedCount.fetch_add(1);
@@ -263,11 +254,10 @@ int main() {
         producer.join();
         consumer.join();
 
-        // Verify: all items received, no gaps, no duplicates
         bool countOk = (consumedCount.load() == totalItems);
         bool seqOk = true;
         for (int i = 0; i < totalItems && seqOk; i++) {
-            if (consumed[i] != i) seqOk = false;
+            if (consumed[i] != static_cast<float>(i)) seqOk = false;
         }
 
         std::cout << (countOk ? "  [PASS]" : "  [FAIL]")
