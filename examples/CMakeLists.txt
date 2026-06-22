@@ -109,4 +109,26 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/audio_loader_test.cpp")
     )
 endif()
 
+# 12. 构建 AudioFramer 测试程序
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/audio_framer_test.cpp")
+    add_executable(audio_framer_test audio_framer_test.cpp)
+
+    target_link_libraries(audio_framer_test PRIVATE digital_human_core)
+
+    set_target_properties(audio_framer_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
+# 13. 构建 MelFeatureExtract 测试程序
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/mel_feature_test.cpp")
+    add_executable(mel_feature_test mel_feature_test.cpp)
+
+    target_link_libraries(mel_feature_test PRIVATE digital_human_core)
+
+    set_target_properties(mel_feature_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
 message(STATUS "Configured example targets.")

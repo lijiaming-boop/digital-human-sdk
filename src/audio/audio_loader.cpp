@@ -66,11 +66,11 @@ struct AudioLoader::Impl {
             throw AudioLoaderException("failed to open codec");
         }
 
-        AVChannelLayout monoLayout = AV_CHANNEL_LAYOUT_MONO;
+        int64_t monoLayout = AV_CH_LAYOUT_MONO;
         SwrContext* swrCtx = nullptr;
-        swr_alloc_set_opts2(&swrCtx,
-            &monoLayout, AV_SAMPLE_FMT_FLT, 16000,
-            &codecCtx->ch_layout, codecCtx->sample_fmt, codecCtx->sample_rate,
+        swrCtx = swr_alloc_set_opts(nullptr,
+            monoLayout, AV_SAMPLE_FMT_FLT, 16000,
+            codecCtx->channel_layout, codecCtx->sample_fmt, codecCtx->sample_rate,
             0, nullptr);
         if (!swrCtx || swr_init(swrCtx) < 0) {
             avcodec_free_context(&codecCtx);
@@ -109,8 +109,7 @@ struct AudioLoader::Impl {
 
                     uint8_t* outBuf = reinterpret_cast<uint8_t*>(buf.data());
                     int converted = swr_convert(swrCtx, &outBuf, outSamples,
-                                                const_cast<const uint8_t**>(
-                                                    reinterpret_cast<const uint8_t**>(frame->data)),
+                                                const_cast<const uint8_t**>(frame->data),
                                                 frame->nb_samples);
                     if (converted > 0) {
                         outputSamples.insert(outputSamples.end(), buf.data(), buf.data() + converted);

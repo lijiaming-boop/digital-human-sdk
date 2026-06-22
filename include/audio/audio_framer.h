@@ -2,7 +2,8 @@
 
 #include <vector>
 #include <memory>
-#include <exception>
+#include <stdexcept>
+#include <string>
 #include <cstdint>
 
 namespace digital_human {

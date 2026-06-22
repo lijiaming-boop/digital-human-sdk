@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//usr/lib/**)",
+      "Bash(dpkg -l)",
+      "Read(//etc/**)",
+      "Read(//c//**)",
+      "Bash(pacman -Qs sqlite)",
+      "Bash(pacman -Qs dlib)",
+      "Bash(find /mingw64 /usr /home -name \"dlibTargets*.cmake\" -o -name \"dlibConfig*.cmake\")",
+      "Read(//c/Users/27013/**)",
+      "Bash(cmake --version)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git checkout *)",
+      "Bash(git pull *)",
+      "Bash(git merge *)",
+      "Bash(git push *)",
+      "Bash(git log *)",
+      "Bash(wsl bash *)",
+      "Bash(cmake ..)",
+      "Read(//c/Program Files/CMake/bin/**)",
+      "Read(//c/Program Files \\(x86\\)/CMake/bin/**)",
+      "Read(//mnt/c/Program Files/CMake/**)",
+      "Read(//c/Program Files/Microsoft Visual Studio//**)",
+      "Bash(apt list *)",
+      "Bash(g++ --version)",
+      "Bash(gcc --version)",
+      "Bash(pkg-config --version)",
+      "Bash(git stash *)",
+      "Bash(wsl --status)",
+      "Read(//mnt/c/Users/27013/Desktop/**)",
+      "Bash(ls build/)",
+      "Bash(ls /mnt/)",
+      "Bash(wslpath \"C:\\\\\\\\Users\\\\\\\\27013\\\\\\\\Desktop\\\\\\\\digital-human-sdk\")"
+    ]
+  }
+}
