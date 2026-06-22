@@ -175,7 +175,18 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/noise_reduction_test.cpp")
     )
 endif()
 
-# 18. 构建 MelFeatureExtract 测试程序
+# 18. 构建 RingBuffer 测试程序
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/ring_buffer_test.cpp")
+    add_executable(ring_buffer_test ring_buffer_test.cpp)
+
+    target_link_libraries(ring_buffer_test PRIVATE digital_human_core)
+
+    set_target_properties(ring_buffer_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
+# 19. 构建 MelFeatureExtract 测试程序
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/mel_feature_test.cpp")
     add_executable(mel_feature_test mel_feature_test.cpp)
 
