@@ -120,7 +120,62 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/audio_framer_test.cpp")
     )
 endif()
 
-# 13. 构建 MelFeatureExtract 测试程序
+# 13. 构建 PreEmphasis 测试程序
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/preemphasis_test.cpp")
+    add_executable(preemphasis_test preemphasis_test.cpp)
+
+    target_link_libraries(preemphasis_test PRIVATE digital_human_core)
+
+    set_target_properties(preemphasis_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
+# 14. 构建 VAD 测试程序
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/vad_test.cpp")
+    add_executable(vad_test vad_test.cpp)
+
+    target_link_libraries(vad_test PRIVATE digital_human_core)
+
+    set_target_properties(vad_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
+# 15. 构建 RMSNormalize 测试程序
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/rmsnorm_test.cpp")
+    add_executable(rmsnorm_test rmsnorm_test.cpp)
+
+    target_link_libraries(rmsnorm_test PRIVATE digital_human_core)
+
+    set_target_properties(rmsnorm_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
+# 16. 构建 CMVN 测试程序
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/cmvn_test.cpp")
+    add_executable(cmvn_test cmvn_test.cpp)
+
+    target_link_libraries(cmvn_test PRIVATE digital_human_core)
+
+    set_target_properties(cmvn_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
+# 17. 构建 NoiseReduction 测试程序
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/noise_reduction_test.cpp")
+    add_executable(noise_reduction_test noise_reduction_test.cpp)
+
+    target_link_libraries(noise_reduction_test PRIVATE digital_human_core)
+
+    set_target_properties(noise_reduction_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
+# 18. 构建 MelFeatureExtract 测试程序
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/mel_feature_test.cpp")
     add_executable(mel_feature_test mel_feature_test.cpp)
 
