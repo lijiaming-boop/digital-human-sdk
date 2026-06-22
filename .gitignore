@@ -1,8 +1,8 @@
-  build/                                                                                                                                                                           
-  *.jpg                                                                                                                                                                            
-  *.png                                                                                                                                                                            
-  *.dat                                                                                                                                                                            
-  .DS_Store                                                                                                                                                                        
-  EOF       
-
-
+build/
+out/
+.vs/
+.vscode/
+*.jpg
+*.png
+*.dat
+.DS_Store
