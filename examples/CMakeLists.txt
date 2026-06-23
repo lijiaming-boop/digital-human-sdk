@@ -197,4 +197,15 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/mel_feature_test.cpp")
     )
 endif()
 
+# 20. 构建 ModelLoader 测试程序
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/model_loader_test.cpp")
+    add_executable(model_loader_test model_loader_test.cpp)
+
+    target_link_libraries(model_loader_test PRIVATE digital_human_core)
+
+    set_target_properties(model_loader_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
 message(STATUS "Configured example targets.")
