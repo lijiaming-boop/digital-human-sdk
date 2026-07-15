@@ -23,6 +23,10 @@ static std::atomic<int> gPaRefCount{0};
 /// @brief PortAudio 初始化互斥锁
 static std::mutex gPaMutex;
 
+/// @brief 是否真正初始化了音频设备（有可用输出设备且流已打开）
+/// 用于避免无音频设备环境下 Pa_Terminate 触发 JACK 后端空指针解引用
+static std::atomic<bool> gPaDeviceReady{false};
+
 // ============================================================================
 // Impl 结构体
 // ============================================================================
@@ -174,9 +178,19 @@ AudioPlayer::~AudioPlayer() {
     Destroy();
 }
 
-AudioPlayer::AudioPlayer(AudioPlayer&&) noexcept = default;
+AudioPlayer::AudioPlayer(AudioPlayer&& other) noexcept
+    : impl_(std::move(other.impl_)) {
+    other.impl_ = nullptr;
+}
 
-AudioPlayer& AudioPlayer::operator=(AudioPlayer&&) noexcept = default;
+AudioPlayer& AudioPlayer::operator=(AudioPlayer&& other) noexcept {
+    if (this != &other) {
+        Destroy();
+        impl_ = std::move(other.impl_);
+        other.impl_ = nullptr;
+    }
+    return *this;
+}
 
 // ============================================================================
 // 初始化与资源管理
@@ -227,12 +241,10 @@ bool AudioPlayer::Init(int sampleRate, int channels, int framesPerBuffer) {
     outputParams.device           = Pa_GetDefaultOutputDevice();
     if (outputParams.device == paNoDevice) {
         impl_->setError("Init: 无可用音频输出设备");
-        // 回退引用计数
+        // 仅回退引用计数，不调用 Pa_Terminate（避免无设备时崩溃）
         {
             std::lock_guard<std::mutex> lock(gPaMutex);
-            if (--gPaRefCount == 0) {
-                Pa_Terminate();
-            }
+            --gPaRefCount;
         }
         return false;
     }
@@ -256,9 +268,7 @@ bool AudioPlayer::Init(int sampleRate, int channels, int framesPerBuffer) {
                         + std::string(Pa_GetErrorText(err)));
         {
             std::lock_guard<std::mutex> lock(gPaMutex);
-            if (--gPaRefCount == 0) {
-                Pa_Terminate();
-            }
+            --gPaRefCount;
         }
         impl_->stream = nullptr;
         return false;
@@ -266,11 +276,12 @@ bool AudioPlayer::Init(int sampleRate, int channels, int framesPerBuffer) {
 
     impl_->state.store(AudioPlayerState::IDLE, std::memory_order_release);
     impl_->initialized = true;
+    gPaDeviceReady.store(true, std::memory_order_release);
     return true;
 }
 
 void AudioPlayer::Destroy() {
-    if (!impl_->initialized) return;
+    if (!impl_ || !impl_->initialized) return;
 
     // 停止流
     if (impl_->stream) {
@@ -282,10 +293,12 @@ void AudioPlayer::Destroy() {
     }
 
     // 终止 PortAudio（引用计数）
+    // 仅在设备就绪时调用 Pa_Terminate，避免无音频设备环境下的 JACK 后端崩溃
     {
         std::lock_guard<std::mutex> lock(gPaMutex);
-        if (--gPaRefCount == 0) {
+        if (--gPaRefCount == 0 && gPaDeviceReady.load(std::memory_order_acquire)) {
             Pa_Terminate();
+            gPaDeviceReady.store(false, std::memory_order_release);
         }
     }
 

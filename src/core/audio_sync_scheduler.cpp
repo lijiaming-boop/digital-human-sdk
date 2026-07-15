@@ -101,9 +101,19 @@ AudioSyncScheduler::~AudioSyncScheduler() {
     Destroy();
 }
 
-AudioSyncScheduler::AudioSyncScheduler(AudioSyncScheduler&&) noexcept = default;
+AudioSyncScheduler::AudioSyncScheduler(AudioSyncScheduler&& other) noexcept
+    : impl_(std::move(other.impl_)) {
+    other.impl_ = nullptr;  // 确保源对象被正确置空
+}
 
-AudioSyncScheduler& AudioSyncScheduler::operator=(AudioSyncScheduler&&) noexcept = default;
+AudioSyncScheduler& AudioSyncScheduler::operator=(AudioSyncScheduler&& other) noexcept {
+    if (this != &other) {
+        Destroy();
+        impl_ = std::move(other.impl_);
+        other.impl_ = nullptr;
+    }
+    return *this;
+}
 
 // ============================================================================
 // 初始化
@@ -167,7 +177,7 @@ bool AudioSyncScheduler::IsInitialized() const {
 }
 
 void AudioSyncScheduler::Destroy() {
-    if (!impl_->initialized) return;
+    if (!impl_ || !impl_->initialized) return;
 
     // 停止播放
     if (impl_->play_state != PlaybackState::STOPPED) {
