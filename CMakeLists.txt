@@ -50,6 +50,11 @@ pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET
 message(STATUS ">> FFMPEG Found: ${FFMPEG_VERSION}")
 message(STATUS ">> FFMPEG Include: ${FFMPEG_INCLUDE_DIRS}")
 
+# 查找 PortAudio (音频播放)
+pkg_check_modules(PORTAUDIO REQUIRED portaudio-2.0)
+message(STATUS ">> PortAudio Found: ${PORTAUDIO_VERSION}")
+message(STATUS ">> PortAudio Include: ${PORTAUDIO_INCLUDE_DIRS}")
+
 # 查找 dlib
 find_package(dlib REQUIRED)
 message(STATUS ">> dlib Found: ${dlib_VERSION}")
@@ -60,6 +65,7 @@ message(STATUS ">> dlib Found: ${dlib_VERSION}")
 include_directories(${OpenCV_INCLUDE_DIRS})
 include_directories(${FFMPEG_INCLUDE_DIRS})
 include_directories(${dlib_INCLUDE_DIRS})
+include_directories(${PORTAUDIO_INCLUDE_DIRS})
 # 打印信息
 message(STATUS "OpenCV library status:")
 message(STATUS "OpenCV version: ${OpenCV_VERSION}")
