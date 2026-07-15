@@ -230,4 +230,15 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/output_processor_test.cpp")
     )
 endif()
 
+# 23. 构建 AVSync 测试程序
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/av_sync_test.cpp")
+    add_executable(av_sync_test av_sync_test.cpp)
+
+    target_link_libraries(av_sync_test PRIVATE digital_human_core)
+
+    set_target_properties(av_sync_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
 message(STATUS "Configured example targets.")
