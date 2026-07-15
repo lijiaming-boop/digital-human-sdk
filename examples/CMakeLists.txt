@@ -219,4 +219,15 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/model_inferencer_test.cpp")
     )
 endif()
 
+# 22. 构建 OutputProcessor 测试程序
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/output_processor_test.cpp")
+    add_executable(output_processor_test output_processor_test.cpp)
+
+    target_link_libraries(output_processor_test PRIVATE digital_human_core)
+
+    set_target_properties(output_processor_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
 message(STATUS "Configured example targets.")
