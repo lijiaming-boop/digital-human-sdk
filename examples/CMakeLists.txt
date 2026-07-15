@@ -329,4 +329,15 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/inference_render_pipeline_test.cpp")
     )
 endif()
 
+# 32. 构建离线音频测试程序
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/offline_audio_test.cpp")
+    add_executable(offline_audio_test offline_audio_test.cpp)
+
+    target_link_libraries(offline_audio_test PRIVATE digital_human_core)
+
+    set_target_properties(offline_audio_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
 message(STATUS "Configured example targets.")

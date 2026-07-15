@@ -66,11 +66,17 @@ struct AudioLoader::Impl {
             throw AudioLoaderException("failed to open codec");
         }
 
+        // 修复: 当 channel_layout 未设置时（某些 WAV 文件），根据 channels 推导
+        int64_t src_layout = codecCtx->channel_layout;
+        if (src_layout == 0) {
+            src_layout = av_get_default_channel_layout(codecCtx->channels);
+        }
+
         int64_t monoLayout = AV_CH_LAYOUT_MONO;
         SwrContext* swrCtx = nullptr;
         swrCtx = swr_alloc_set_opts(nullptr,
             monoLayout, AV_SAMPLE_FMT_FLT, 16000,
-            codecCtx->channel_layout, codecCtx->sample_fmt, codecCtx->sample_rate,
+            src_layout, codecCtx->sample_fmt, codecCtx->sample_rate,
             0, nullptr);
         if (!swrCtx || swr_init(swrCtx) < 0) {
             avcodec_free_context(&codecCtx);

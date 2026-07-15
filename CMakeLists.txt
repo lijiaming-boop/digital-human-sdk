@@ -30,6 +30,9 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 ############################## 全局头文件目录
 include_directories(${CMAKE_SOURCE_DIR}/include)
 
+# 定义资源目录宏
+add_definitions(-DASSETS_DIR="${CMAKE_SOURCE_DIR}/assets")
+
 ############################## 第三方依赖
 # ~/.local/lib 中有缺失的 .so 开发符号链接（libjpeg.so, libsqlite3.so 等）
 link_directories(BEFORE "$ENV{HOME}/.local/lib")
