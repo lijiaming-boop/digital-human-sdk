@@ -241,4 +241,26 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/av_sync_test.cpp")
     )
 endif()
 
+# 24. 构建 FrameScheduler 测试程序
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/frame_scheduler_test.cpp")
+    add_executable(frame_scheduler_test frame_scheduler_test.cpp)
+
+    target_link_libraries(frame_scheduler_test PRIVATE digital_human_core)
+
+    set_target_properties(frame_scheduler_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
+# 25. 构建 AudioSyncScheduler 测试程序
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/audio_sync_test.cpp")
+    add_executable(audio_sync_test audio_sync_test.cpp)
+
+    target_link_libraries(audio_sync_test PRIVATE digital_human_core)
+
+    set_target_properties(audio_sync_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
 message(STATUS "Configured example targets.")
