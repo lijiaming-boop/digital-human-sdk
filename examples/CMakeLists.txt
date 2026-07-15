@@ -274,4 +274,15 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/pipeline_test.cpp")
     )
 endif()
 
+# 27. 构建 AudioProcessor 音频处理线程测试程序
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/audio_processor_test.cpp")
+    add_executable(audio_processor_test audio_processor_test.cpp)
+
+    target_link_libraries(audio_processor_test PRIVATE digital_human_core)
+
+    set_target_properties(audio_processor_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
 message(STATUS "Configured example targets.")
