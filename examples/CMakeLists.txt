@@ -285,4 +285,15 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/audio_processor_test.cpp")
     )
 endif()
 
+# 28. 构建 InferenceWorker 推理线程测试程序
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/inference_worker_test.cpp")
+    add_executable(inference_worker_test inference_worker_test.cpp)
+
+    target_link_libraries(inference_worker_test PRIVATE digital_human_core)
+
+    set_target_properties(inference_worker_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
 message(STATUS "Configured example targets.")

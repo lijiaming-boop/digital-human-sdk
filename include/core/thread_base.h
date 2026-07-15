@@ -103,33 +103,18 @@ public:
     /**
      * @brief 等待线程退出
      *
-     * @param timeout_ms 超时时间（毫秒），-1 表示无限等待
+     * 阻塞直到线程完全退出。
+     * std::thread 不支持超时 join，timeout_ms 为预留参数（当前始终阻塞等待）。
+     *
+     * @param timeout_ms 预留参数，当前无效（始终完全等待）
      * @return true  线程正常退出
-     * @return false 超时
      */
-    bool Wait(int timeout_ms = -1) {
-        if (!thread_.joinable()) {
-            FinalizeState();
-            return true;
-        }
-
-        if (timeout_ms < 0) {
+    bool Wait(int /*timeout_ms*/ = -1) {
+        if (thread_.joinable()) {
             thread_.join();
-            FinalizeState();
-            return true;
         }
-
-        auto tp = std::chrono::steady_clock::now()
-                  + std::chrono::milliseconds(timeout_ms);
-        while (std::chrono::steady_clock::now() < tp) {
-            if (!thread_.joinable()) {
-                FinalizeState();
-                return true;
-            }
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        }
-
-        return false;  // 超时
+        FinalizeState();
+        return true;
     }
 
     /**

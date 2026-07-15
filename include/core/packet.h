@@ -133,5 +133,53 @@ using ProcessedFacePacket   = Packet<ProcessedFaceData>;        ///< 处理后�
 using InferenceOutputPacket = Packet<ncnn::Mat>;                ///< 模型推理输出
 using OutputFramePacket     = Packet<cv::Mat>;                  ///< 最终输出帧
 
+// ============================================================================
+// 推理任务（组合 Mel 特征 + 人脸数据）
+// ============================================================================
+
+/// @brief 推理任务，包含 Mel 特征和对齐人脸数据
+struct InferenceTask {
+    MelFeaturePacket      mel;               ///< Mel 频谱特征
+    ProcessedFacePacket   face;              ///< 对齐人脸 + 遮罩 + M_inv
+    int                   retry_count  = 0;  ///< 当前重试次数
+    int64_t               enqueue_ms   = 0;  ///< 入队时间戳（毫秒）
+
+    static constexpr int kMaxRetries = 3;
+
+    /// @brief 是否还可以重试
+    bool CanRetry() const { return retry_count < kMaxRetries; }
+
+    /// @brief 创建重试副本（retry_count+1）
+    InferenceTask Retry() const {
+        InferenceTask t = *this;
+        t.retry_count++;
+        return t;
+    }
+
+    /// @brief 检查是否有效
+    bool IsValid() const {
+        return mel.header.IsOK() && face.header.IsOK() && face.payload.IsValid();
+    }
+
+    /// @brief 构造 EOS 任务
+    static InferenceTask EOS() {
+        InferenceTask t;
+        t.mel.header.status   = StatusCode::EOS;
+        t.face.header.status  = StatusCode::EOS;
+        return t;
+    }
+
+    /// @brief 构造 Fatal 任务
+    static InferenceTask Fatal() {
+        InferenceTask t;
+        t.mel.header.status   = StatusCode::FATAL;
+        t.face.header.status  = StatusCode::FATAL;
+        return t;
+    }
+
+    bool IsEOS()   const { return mel.header.IsEOS() || face.header.IsEOS(); }
+    bool IsFatal() const { return mel.header.IsFatal() || face.header.IsFatal(); }
+};
+
 }  // namespace core
 }  // namespace digital_human
