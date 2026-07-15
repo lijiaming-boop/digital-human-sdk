@@ -318,4 +318,15 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/full_pipeline_test.cpp")
     )
 endif()
 
+# 31. 构建推理+渲染联调测试
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/inference_render_pipeline_test.cpp")
+    add_executable(inference_render_pipeline_test inference_render_pipeline_test.cpp)
+
+    target_link_libraries(inference_render_pipeline_test PRIVATE digital_human_core)
+
+    set_target_properties(inference_render_pipeline_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
 message(STATUS "Configured example targets.")
