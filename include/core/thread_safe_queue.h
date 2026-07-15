@@ -1,13 +1,14 @@
 #pragma once
 
+#include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <deque>
+#include <iostream>
 #include <mutex>
+#include <sstream>
 #include <string>
 #include <vector>
-#include <sstream>
-#include <iostream>
 
 namespace digital_human {
 namespace core {

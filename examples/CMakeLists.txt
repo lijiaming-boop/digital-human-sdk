@@ -307,4 +307,15 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/render_thread_test.cpp")
     )
 endif()
 
+# 30. 构建全链路流程集成测试
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/full_pipeline_test.cpp")
+    add_executable(full_pipeline_test full_pipeline_test.cpp)
+
+    target_link_libraries(full_pipeline_test PRIVATE digital_human_core)
+
+    set_target_properties(full_pipeline_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
 message(STATUS "Configured example targets.")
