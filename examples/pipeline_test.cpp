@@ -508,6 +508,185 @@ static void testHighThroughput() {
 }
 
 // ============================================================================
+// Test 15: 队列移动语义与 Emplace 原位构造
+// ============================================================================
+static void testQueueMoveAndEmplace() {
+    TEST_NAME("Test 15: 队列移动语义与 Emplace 原位构造");
+
+    // Push 移动语义 — MoveOnly 类型验证
+    struct MoveOnly {
+        int val;
+        explicit MoveOnly(int v) : val(v) {}
+        MoveOnly(const MoveOnly&) = delete;
+        MoveOnly& operator=(const MoveOnly&) = delete;
+        MoveOnly(MoveOnly&&) = default;
+        MoveOnly& operator=(MoveOnly&&) = default;
+    };
+
+    ThreadSafeQueue<MoveOnly> queue;
+    queue.Push(MoveOnly(42));
+    queue.Emplace(100);
+
+    MoveOnly item(0);
+    queue.WaitAndPop(item);
+    TEST_CHECK(item.val == 42, "15.1 移动语义 Push 正确");
+
+    queue.WaitAndPop(item);
+    TEST_CHECK(item.val == 100, "15.2 Emplace 原位构造正确");
+}
+
+// ============================================================================
+// Test 16: 批量出队性能优化
+// ============================================================================
+static void testBatchPop() {
+    TEST_NAME("Test 16: 批量出队性能优化");
+
+    ThreadSafeQueue<int> queue;
+    for (int i = 0; i < 100; ++i) {
+        queue.Push(i);
+    }
+
+    std::vector<int> batch;
+    size_t count = queue.TryPopBatch(batch, 30);
+    TEST_CHECK(count == 30, "16.1 批量出队30个成功, 实际=" << count);
+    TEST_CHECK(batch.size() == 30, "16.2 batch 容器大小=30");
+    TEST_CHECK(batch[0] == 0, "16.3 第一个元素=0");
+    TEST_CHECK(batch[29] == 29, "16.4 第30个元素=29");
+
+    // 再次批量出队全部剩余
+    batch.clear();
+    count = queue.TryPopBatch(batch, 0);  // 0 = 全部
+    TEST_CHECK(count == 70, "16.5 清空剩余70个, 实际=" << count);
+
+    // 空队列批量出队
+    batch.clear();
+    count = queue.TryPopBatch(batch, 10);
+    TEST_CHECK(count == 0, "16.6 空队列批量出队=0");
+}
+
+// ============================================================================
+// Test 17: 心跳检测与健康检查
+// ============================================================================
+static void testHeartbeat() {
+    TEST_NAME("Test 17: 心跳检测与健康检查");
+
+    // 启用 100ms 心跳超时
+    ThreadSafeQueue<int> queue(0, "test_heartbeat", 100);
+
+    // 未心跳时默认健康
+    TEST_CHECK(queue.IsHealthy(), "17.1 初始状态健康");
+
+    // 发送心跳
+    queue.Heartbeat();
+    TEST_CHECK(queue.IsHealthy(), "17.2 心跳后健康");
+
+    // 等待超过超时时间
+    std::this_thread::sleep_for(std::chrono::milliseconds(150));
+    TEST_CHECK(!queue.IsHealthy(), "17.3 超时后不健康");
+
+    // 再次心跳恢复健康
+    queue.Heartbeat();
+    TEST_CHECK(queue.IsHealthy(), "17.4 再次心跳后恢复健康");
+
+    // 未启用心跳检测的队列
+    ThreadSafeQueue<int> q2;
+    q2.Heartbeat();
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    TEST_CHECK(q2.IsHealthy(), "17.5 未启用检测始终健康");
+}
+
+// ============================================================================
+// Test 18: 死锁检测
+// ============================================================================
+static void testDeadlockDetection() {
+    TEST_NAME("Test 18: 死锁检测");
+
+    ThreadSafeQueue<int> queue(0, "test_deadlock", 0);
+
+    // 空队列不应检测到死锁
+    TEST_CHECK(!queue.CheckDeadlock(50), "18.1 空队列无死锁");
+
+    // 入队后消费者停滞
+    queue.Push(1);
+    queue.Push(2);
+    queue.Push(3);
+
+    // 短超时应检测到消费者死锁
+    std::this_thread::sleep_for(std::chrono::milliseconds(60));
+    TEST_CHECK(queue.CheckDeadlock(50), "18.2 消费者停滞检测到死锁");
+
+    // 消费后清除死锁
+    int v;
+    queue.WaitAndPop(v, 100);
+    queue.WaitAndPop(v, 100);
+    queue.WaitAndPop(v, 100);
+    // 空队列后再检测
+    std::this_thread::sleep_for(std::chrono::milliseconds(30));
+    TEST_CHECK(!queue.CheckDeadlock(100), "18.3 消费后无死锁");
+}
+
+// ============================================================================
+// Test 19: 队列运行时指标
+// ============================================================================
+static void testQueueMetrics() {
+    TEST_NAME("Test 19: 队列运行时指标");
+
+    ThreadSafeQueue<int> queue(10, "metrics_test");
+    TEST_CHECK(queue.GetMetrics().ToString().find("metrics_test") != std::string::npos,
+               "19.1 指标包含队列名称");
+
+    // 入队 5 个
+    for (int i = 0; i < 5; ++i) queue.Push(i);
+
+    auto m1 = queue.GetMetrics();
+    TEST_CHECK(m1.current_size == 5, "19.2 当前大小=5");
+    TEST_CHECK(m1.total_pushes == 5, "19.3 总入队=5");
+    TEST_CHECK(m1.total_pops == 0, "19.4 总出队=0");
+    TEST_CHECK(m1.peak_size == 5, "19.5 峰值=5");
+
+    // 出队 3 个
+    int v;
+    queue.WaitAndPop(v); queue.WaitAndPop(v); queue.WaitAndPop(v);
+
+    auto m2 = queue.GetMetrics();
+    TEST_CHECK(m2.current_size == 2, "19.6 当前大小=2");
+    TEST_CHECK(m2.total_pops == 3, "19.7 总出队=3");
+
+    // 队列名
+    TEST_CHECK(queue.GetName() == "metrics_test", "19.8 队列名称正确");
+
+    std::cout << "  [INFO] Metrics: " << m2.ToString() << std::endl;
+}
+
+// ============================================================================
+// Test 20: 超时等待不阻塞
+// ============================================================================
+static void testTimeoutNoBlock() {
+    TEST_NAME("Test 20: 超时等待不阻塞");
+
+    ThreadSafeQueue<int> queue;
+
+    // 空队列 WaitAndPop 应超时返回 false
+    int v = -1;
+    auto start = std::chrono::steady_clock::now();
+    bool result = queue.WaitAndPop(v, 50);  // 50ms 超时
+    auto elapsed = std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - start).count();
+
+    TEST_CHECK(!result, "20.1 空队列超时返回 false");
+    TEST_CHECK(elapsed >= 40 && elapsed < 500,
+               "20.2 超时耗时合理 (" << elapsed << "ms)");
+
+    // 0ms 超时 = 非阻塞
+    start = std::chrono::steady_clock::now();
+    result = queue.WaitAndPop(v, 0);
+    elapsed = std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - start).count();
+    TEST_CHECK(!result, "20.3 非阻塞模式返回 false");
+    TEST_CHECK(elapsed < 10, "20.4 非阻塞耗时 < 10ms (" << elapsed << "ms)");
+}
+
+// ============================================================================
 // 主函数
 // ============================================================================
 
@@ -530,6 +709,12 @@ int main() {
     testBackPressure();
     testExceptionSafety();
     testHighThroughput();
+    testQueueMoveAndEmplace();
+    testBatchPop();
+    testHeartbeat();
+    testDeadlockDetection();
+    testQueueMetrics();
+    testTimeoutNoBlock();
 
     // ==========================================
     // 汇总
