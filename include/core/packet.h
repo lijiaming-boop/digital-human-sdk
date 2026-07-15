@@ -131,7 +131,39 @@ using MelFeaturePacket      = Packet<cv::Mat>;                  ///< Mel 频谱�
 using VideoFramePacket      = Packet<cv::Mat>;                  ///< 原始视频帧
 using ProcessedFacePacket   = Packet<ProcessedFaceData>;        ///< 处理后的人脸数据
 using InferenceOutputPacket = Packet<ncnn::Mat>;                ///< 模型推理输出
-using OutputFramePacket     = Packet<cv::Mat>;                  ///< 最终输出帧
+
+// ============================================================================
+// 渲染任务数据（模型输出 + 原始人脸 + 变换矩阵 + 遮罩）
+// ============================================================================
+
+/// @brief 渲染任务数据，包含融合所需的所有图像数据
+struct RenderTaskData {
+    ncnn::Mat          model_output;      ///< 模型输出 448×96 RGB float
+    cv::Mat            original_face;     ///< 原始人脸 (BGR uint8)
+    cv::Mat            M_inv;             ///< 逆仿射变换矩阵 2×3
+    cv::Mat            face_mask;         ///< 口唇遮罩 (CV_32FC1)
+
+    bool IsValid() const {
+        return !model_output.empty() && !original_face.empty()
+            && !M_inv.empty() && !face_mask.empty();
+    }
+
+    /// @brief 构造一个有效的 RenderTaskData
+    static RenderTaskData Make(ncnn::Mat&& output,
+                                cv::Mat&& face,
+                                cv::Mat&& inv,
+                                cv::Mat&& mask) {
+        RenderTaskData d;
+        d.model_output   = std::move(output);
+        d.original_face  = std::move(face);
+        d.M_inv          = std::move(inv);
+        d.face_mask      = std::move(mask);
+        return d;
+    }
+};
+
+using RenderPacket       = Packet<RenderTaskData>;               ///< 渲染任务包
+using OutputFramePacket  = Packet<cv::Mat>;                      ///< 最终输出帧
 
 // ============================================================================
 // 推理任务（组合 Mel 特征 + 人脸数据）

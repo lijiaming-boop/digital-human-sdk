@@ -296,4 +296,15 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/inference_worker_test.cpp")
     )
 endif()
 
+# 29. 构建 RenderThread 渲染线程测试程序
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/render_thread_test.cpp")
+    add_executable(render_thread_test render_thread_test.cpp)
+
+    target_link_libraries(render_thread_test PRIVATE digital_human_core)
+
+    set_target_properties(render_thread_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
 message(STATUS "Configured example targets.")
