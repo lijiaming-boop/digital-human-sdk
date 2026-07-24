@@ -340,4 +340,145 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/offline_audio_test.cpp")
     )
 endif()
 
+# 33. 构建拟合效果测试程序
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/fit_test.cpp")
+    add_executable(fit_test fit_test.cpp)
+
+    target_link_libraries(fit_test PRIVATE digital_human_core)
+
+    set_target_properties(fit_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
+# 34. 构建可视化输出测试程序 — 需要系统 OpenCV highgui，暂跳过
+# if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/visual_output_test.cpp")
+#     add_executable(visual_output_test visual_output_test.cpp)
+#     target_link_libraries(visual_output_test PRIVATE digital_human_core)
+#     target_include_directories(visual_output_test PRIVATE /usr/include/opencv4)
+#     set_target_properties(visual_output_test PROPERTIES
+#         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+#     )
+# endif()
+
+# 35. 构建音视频输出测试程序
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/video_output_test.cpp")
+    add_executable(video_output_test video_output_test.cpp)
+
+    target_link_libraries(video_output_test PRIVATE digital_human_core)
+
+    set_target_properties(video_output_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
+# 36. 构建诊断测试程序 — 需要系统 OpenCV highgui，暂跳过
+# if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/diagnose_output.cpp")
+#     add_executable(diagnose_output diagnose_output.cpp)
+#     target_link_libraries(diagnose_output PRIVATE digital_human_core)
+#     target_include_directories(diagnose_output PRIVATE /usr/include/opencv4)
+#     set_target_properties(diagnose_output PROPERTIES
+#         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+#     )
+# endif()
+
+# 37. Bug Fix Verification Test
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/bugfix_verification_test.cpp")
+    add_executable(bugfix_verification_test bugfix_verification_test.cpp)
+    target_link_libraries(bugfix_verification_test PRIVATE digital_human_core)
+    set_target_properties(bugfix_verification_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
+# 第二轮 Bug 修复验证测试（2026-07-16 代码审查）
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/bugfix_v2_test.cpp")
+    add_executable(bugfix_v2_test bugfix_v2_test.cpp)
+    target_link_libraries(bugfix_v2_test PRIVATE digital_human_core)
+    set_target_properties(bugfix_v2_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
+# v1 代码审查报告修复验证测试（7 项主要问题逐条验证）
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/v1_review_fixes_test.cpp")
+    add_executable(v1_review_fixes_test v1_review_fixes_test.cpp)
+    target_link_libraries(v1_review_fixes_test PRIVATE digital_human_core)
+    set_target_properties(v1_review_fixes_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
+# 唇形同步诊断测试 — 验证模型输出是否随音频输入变化
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/lip_sync_diagnose_test.cpp")
+    add_executable(lip_sync_diagnose_test lip_sync_diagnose_test.cpp)
+    target_link_libraries(lip_sync_diagnose_test PRIVATE digital_human_core)
+    set_target_properties(lip_sync_diagnose_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
+# 端到端性能基准测试 — 测量 fps、延迟分布、缓存命中率
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/perf_benchmark.cpp")
+    add_executable(perf_benchmark perf_benchmark.cpp)
+    target_link_libraries(perf_benchmark PRIVATE digital_human_core)
+    set_target_properties(perf_benchmark PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
+# 纯流水线性能基准（不依赖 Wav2Lip 推理，验证缓存/定时）
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/perf_pipeline_only.cpp")
+    add_executable(perf_pipeline_only perf_pipeline_only.cpp)
+    target_link_libraries(perf_pipeline_only PRIVATE digital_human_core)
+    set_target_properties(perf_pipeline_only PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
+# P0 优化前后对比基准
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/perf_baseline_compare.cpp")
+    add_executable(perf_baseline_compare perf_baseline_compare.cpp)
+    target_link_libraries(perf_baseline_compare PRIVATE digital_human_core)
+    set_target_properties(perf_baseline_compare PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
+# Pipeline 端到端口型同步 + 帧率验证（修复后验收测试）
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/pipeline_lipsync_test.cpp")
+    add_executable(pipeline_lipsync_test pipeline_lipsync_test.cpp)
+    target_link_libraries(pipeline_lipsync_test PRIVATE digital_human_core)
+    set_target_properties(pipeline_lipsync_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
+# P1 性能策略验收：P0/P1 回归 + 线程预算 sweep + GPU 端到端验证 + ROI 收益量化
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/perf_p1_strategy.cpp")
+    add_executable(perf_p1_strategy perf_p1_strategy.cpp)
+    target_link_libraries(perf_p1_strategy PRIVATE digital_human_core)
+    set_target_properties(perf_p1_strategy PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
 message(STATUS "Configured example targets.")
+
+# ProcessROI 修复效果验证 (合成数据, 不依赖模型/音频)
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/verify_postprocess_fix.cpp")
+    add_executable(verify_postprocess_fix verify_postprocess_fix.cpp)
+    target_link_libraries(verify_postprocess_fix PRIVATE digital_human_core)
+    set_target_properties(verify_postprocess_fix PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
+# 导出 fusion_mask 用于验证渐变带宽度
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/dump_fusion_mask.cpp")
+    add_executable(dump_fusion_mask dump_fusion_mask.cpp)
+    target_link_libraries(dump_fusion_mask PRIVATE digital_human_core)
+    set_target_properties(dump_fusion_mask PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()

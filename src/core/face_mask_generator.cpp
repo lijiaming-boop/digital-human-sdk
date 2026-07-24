@@ -5,8 +5,8 @@
 
 #include "core/face_mask_generator.h"
 
-namespace DigitalHuman {
-namespace Core {
+namespace digital_human {
+namespace core {
 
 struct FaceMaskGenerator::Impl {
 
@@ -138,28 +138,38 @@ cv::Mat generatePreciseMouthAlphaMask96(const std::vector<cv::Point2f>& landmark
         return empty_mask;
     }
 
-    // 清除嘴部区域外的 mask
-    if (x_left > 0) {
-        mask_u8.colRange(0, x_left).setTo(0);
-    }
-    if (x_right + 1 < 96) {
-        mask_u8.colRange(x_right + 1, 96).setTo(0);
-    }
-    if (y_top > 0) {
-        mask_u8.rowRange(0, y_top).setTo(0);
-    }
-    if (y_bottom + 1 < 96) {
-        mask_u8.rowRange(y_bottom + 1, 96).setTo(0);
-    }
-
-    // 清除边缘噪声，防止 mask 贴边
+    // 清除嘴部 ROI 之外的 mask，并将原 5 次 setTo 合并为 4 个矩形 fill：
+    //   - 左、右、上、下四条外框带，单次扫描即可清零
+    //   - 2 px 边缘清除合并进来：ROI 在向内收缩 border 像素
     const int border = 2;
-    mask_u8.rowRange(0, border).setTo(0);
-    mask_u8.rowRange(96 - border, 96).setTo(0);
-    mask_u8.colRange(0, border).setTo(0);
-    mask_u8.colRange(96 - border, 96).setTo(0);
+    int bx_left   = std::max(border, x_left);
+    int bx_right  = std::min(96 - 1 - border, x_right);
+    int by_top    = std::max(border, y_top);
+    int by_bottom = std::min(96 - 1 - border, y_bottom);
 
-    cv::GaussianBlur(mask_u8, mask_u8, cv::Size(13, 13), 0);
+    if (bx_left >= bx_right || by_top >= by_bottom) {
+        // ROI 退化：返回空白 mask
+        cv::Mat empty_mask;
+        mask_u8.convertTo(empty_mask, CV_32FC1, 1.0 / 255.0);
+        return empty_mask;
+    }
+
+    // ROI 之外区域清零（mask_u8 在 ROI 内已为 255，无需重填）
+    cv::rectangle(mask_u8, cv::Rect(0, 0, bx_left, 96),
+                  cv::Scalar(0), cv::FILLED);
+    cv::rectangle(mask_u8,
+                  cv::Rect(bx_right + 1, 0, 96 - 1 - bx_right, 96),
+                  cv::Scalar(0), cv::FILLED);
+    cv::rectangle(mask_u8, cv::Rect(bx_left, 0, bx_right - bx_left + 1, by_top),
+                  cv::Scalar(0), cv::FILLED);
+    cv::rectangle(mask_u8,
+                  cv::Rect(bx_left, by_bottom + 1,
+                           bx_right - bx_left + 1, 96 - 1 - by_bottom),
+                  cv::Scalar(0), cv::FILLED);
+
+    // 加大 blur 核 (13→21):扩大 96 空间渐变带宽度,
+    // 投影到原图后渐变区从 4-17px 提升到 8-30px,消化边界色差
+    cv::GaussianBlur(mask_u8, mask_u8, cv::Size(21, 21), 0);
 
     cv::Mat mask_float;
     mask_u8.convertTo(mask_float, CV_32FC1, 1.0 / 255.0);
@@ -188,7 +198,7 @@ cv::Mat to3ChannelMask(const cv::Mat& alpha_mask) const {
 }
 };
 
-FaceMaskGenerator::FaceMaskGenerator() : pImpl(std::make_unique<Impl>()) {}
+FaceMaskGenerator::FaceMaskGenerator() : impl_(std::make_unique<Impl>()) {}
 FaceMaskGenerator::~FaceMaskGenerator() = default;
 
 FaceMaskGenerator::FaceMaskGenerator(FaceMaskGenerator&&) noexcept = default;
@@ -199,19 +209,19 @@ cv::Mat FaceMaskGenerator::generateMouthMask(const cv::Size& image_size,
                                              const std::vector<cv::Point>& landmarks,
                                              int dilate_radius,
                                              int blur_kernel_size) {
-    return pImpl->generateMouthMask(image_size, landmarks, dilate_radius,
+    return impl_->generateMouthMask(image_size, landmarks, dilate_radius,
                                     blur_kernel_size);
 }
 
 cv::Mat FaceMaskGenerator::generatePreciseMouthAlphaMask96(
     const std::vector<cv::Point2f>& landmarks_96
 ) {
-    return pImpl->generatePreciseMouthAlphaMask96(landmarks_96);
+    return impl_->generatePreciseMouthAlphaMask96(landmarks_96);
 }
 
 cv::Mat FaceMaskGenerator::to3ChannelMask(const cv::Mat& alpha_mask) const {
-    return pImpl->to3ChannelMask(alpha_mask);
+    return impl_->to3ChannelMask(alpha_mask);
 }
 
-} // namespace Core
-} // namespace DigitalHuman
+} // namespace core
+} // namespace digital_human

@@ -4,8 +4,8 @@
 #include <memory>
 #include <opencv2/core.hpp>
 
-namespace DigitalHuman {
-namespace Core {
+namespace digital_human {
+namespace core {
 
 class FaceMaskGenerator {
 public:
@@ -29,7 +29,7 @@ public:
     cv::Mat generateMouthMask(const cv::Size& image_size,
                               const std::vector<cv::Point>& landmarks,
                               int dilate_radius = 5,
-                              int blur_sigma = 15);
+                              int blur_sigma = 35);
 
     /**
      * @brief 生成 96x96 对齐空间下的精细嘴部 alpha mask
@@ -46,7 +46,7 @@ public:
 
 private:
     struct Impl;
-    std::unique_ptr<Impl> pImpl;
+    std::unique_ptr<Impl> impl_;
 };
 
 } 
