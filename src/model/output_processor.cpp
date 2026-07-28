@@ -20,29 +20,12 @@ struct OutputProcessor::Impl {
     static constexpr int kDefaultFaceW = 96;   ///< 默认人脸宽度
     static constexpr int kDefaultFaceH = 96;   ///< 默认人脸高度
 
-    // ---- 预分配缓冲区（避免每帧堆分配） ----
-    cv::Mat orig_f_buf_;        ///< CV_32FC3, 原始图像 float 版
-    cv::Mat gen_f_buf_;         ///< CV_32FC3, 生成图像 float 版
-    cv::Mat mask_3ch_buf_;      ///< CV_32FC3, 3 通道遮罩
-    cv::Mat inv_mask_buf_;      ///< CV_32FC3, 逆遮罩
-    cv::Mat inv_mask_1ch_buf_;  ///< CV_32FC1, 单通道逆遮罩（blendLinear 权重）
-    cv::Mat gen_weighted_buf_;  ///< CV_32FC3, 加权生成图像
-    cv::Mat orig_weighted_buf_; ///< CV_32FC3, 加权原始图像
-    cv::Mat result_f_buf_;      ///< CV_32FC3, float 融合结果
-    cv::Size last_buf_size_{0, 0};  ///< 上次缓冲区尺寸，用于检测是否需要重新分配
+    // blendLinear 只需要一张单通道逆遮罩。缓存该图像可避免每帧分配，
+    // 同时不会为早期手动 float 融合路径保留未使用的全尺寸缓冲。
+    cv::Mat inv_mask_1ch_buf_;  ///< CV_32FC1, blendLinear 的背景权重
 
-    /// @brief 确保预分配缓冲区尺寸匹配，避免每帧重新分配
-    void EnsureBuffers(const cv::Size& size) {
-        if (size == last_buf_size_) return;
-        orig_f_buf_       = cv::Mat(size, CV_32FC3);
-        gen_f_buf_        = cv::Mat(size, CV_32FC3);
-        mask_3ch_buf_     = cv::Mat(size, CV_32FC3);
-        inv_mask_buf_     = cv::Mat(size, CV_32FC3);
-        inv_mask_1ch_buf_ = cv::Mat(size, CV_32FC1);
-        gen_weighted_buf_  = cv::Mat(size, CV_32FC3);
-        orig_weighted_buf_ = cv::Mat(size, CV_32FC3);
-        result_f_buf_     = cv::Mat(size, CV_32FC3);
-        last_buf_size_    = size;
+    void EnsureInverseMaskBuffer(const cv::Size& size) {
+        inv_mask_1ch_buf_.create(size, CV_32FC1);
     }
 
     // ========================================================================
@@ -288,7 +271,7 @@ struct OutputProcessor::Impl {
         // result = gen * mask + orig * (1 - mask)
         // blendLinear 要求权重为 CV_32FC1 单通道 float，内部对 8UC3
         // 有 SIMD 优化路径，一次调用替代整个 float 转换链
-        EnsureBuffers(original.size());
+        EnsureInverseMaskBuffer(original.size());
         cv::subtract(cv::Scalar(1.0f), mask_f, inv_mask_1ch_buf_);
 
         cv::Mat result;

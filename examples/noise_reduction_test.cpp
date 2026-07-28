@@ -19,6 +19,7 @@ int main() {
     std::cout << "========== NoiseReduction Test ==========" << std::endl;
 
     const int sampleRate = 16000;
+    int failures = 0;
 
     // ==========================================
     // Test 1: Silent input → unchanged
@@ -34,6 +35,7 @@ int main() {
         for (float x : result) maxAbs = std::max(maxAbs, std::fabs(x));
 
         bool ok = (maxAbs < 0.01f);
+        failures += !ok;
         std::cout << (ok ? "  [PASS]" : "  [FAIL]")
                   << " Silent remains silent (max=" << maxAbs << ")" << std::endl;
     }
@@ -60,6 +62,7 @@ int main() {
 
         float ratio = resultRMS / std::max(originalRMS, 1e-10f);
         bool ok = (ratio > 0.7f && ratio < 1.3f);
+        failures += !ok;
         std::cout << (ok ? "  [PASS]" : "  [FAIL]")
                   << " RMS ratio = " << ratio << " (expected ~1.0)" << std::endl;
     }
@@ -91,6 +94,7 @@ int main() {
         }
 
         bool ok = (resultEnergy < originalEnergy);
+        failures += !ok;
         std::cout << (ok ? "  [PASS]" : "  [FAIL]")
                   << " Energy reduced (before=" << originalEnergy
                   << ", after=" << resultEnergy << ")" << std::endl;
@@ -106,6 +110,7 @@ int main() {
         auto result = nr.process(empty, sampleRate);
 
         bool ok = result.empty();
+        failures += !ok;
         std::cout << (ok ? "  [PASS]" : "  [FAIL]") << " Returns empty" << std::endl;
     }
 
@@ -119,6 +124,7 @@ int main() {
         auto result = nr.process(pcm, sampleRate);
 
         bool ok = (result.size() == pcm.size());
+        failures += !ok;
         std::cout << (ok ? "  [PASS]" : "  [FAIL]")
                   << " Size preserved (" << result.size() << ")" << std::endl;
     }
@@ -136,9 +142,33 @@ int main() {
         for (float x : result) {
             if (!std::isfinite(x)) { allFinite = false; break; }
         }
+        failures += !allFinite;
         std::cout << (allFinite ? "  [PASS]" : "  [FAIL]") << " All finite" << std::endl;
     }
 
-    std::cout << "\n========== Test Complete ==========" << std::endl;
-    return 0;
+    // ==========================================
+    // Test 7: Long input remains bounded and valid
+    // ==========================================
+    std::cout << "\n[Test 7] Long input..." << std::endl;
+    {
+        NoiseReduction nr(10, 0.5f);
+        auto pcm = generateSine(440.0f, 60.0f, sampleRate);
+        auto result = nr.process(pcm, sampleRate);
+
+        bool ok = result.size() == pcm.size();
+        for (float x : result) {
+            if (!std::isfinite(x)) {
+                ok = false;
+                break;
+            }
+        }
+        failures += !ok;
+        std::cout << (ok ? "  [PASS]" : "  [FAIL]")
+                  << " 60-second input processed (" << result.size()
+                  << " samples)" << std::endl;
+    }
+
+    std::cout << "\n========== Test Complete: "
+              << failures << " failure(s) ==========" << std::endl;
+    return failures == 0 ? 0 : 1;
 }
