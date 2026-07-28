@@ -95,13 +95,20 @@ struct AudioProcessor::Impl {
     // 内部方法
     // ========================================================================
 
-    /// @brief 更新 Mel 配置
+    /// @brief 更新 Mel 配置（对齐 Wav2Lip 官方预处理参数）
     void UpdateMelConfig() {
         mel_config.nFFT       = config.nfft;
         mel_config.nMels      = config.mel_bins;
         mel_config.sampleRate = config.sample_rate;
-        mel_config.fMin       = 0.0f;
-        mel_config.fMax       = 8000.0f;
+        // Wav2Lip 官方：fmin=55, fmax=7600（旧值 0/8000 会让模型输入分布偏移）
+        mel_config.fMin       = 55.0f;
+        mel_config.fMax       = 7600.0f;
+        // 窗长与 nFFT 一致（Wav2Lip: win_size=n_fft=800）
+        mel_config.winSize    = config.nfft;
+        // Wav2Lip symmetric 归一化参数
+        mel_config.refLevelDb = 20.0f;
+        mel_config.minLevelDb = -100.0f;
+        mel_config.maxAbsNorm = 4.0f;
         mel_config_dirty_     = false;
     }
 
@@ -297,24 +304,24 @@ struct AudioProcessor::Impl {
             // 5. VAD 过滤
             auto voiced = vad.filter(frames);
 
-            // 6. Mel 特征提取 — 输出 dB 域 log-mel，禁止单帧 min-max：
-            //    单帧独立 min-max 会把每帧拉伸到满量程 [0,1]，摧毁帧间动态。
-            //    归一化（min-max + CMVN）由下游窗口装配器在上下文上统一执行。
+            // 6. Mel 特征提取 — Wav2Lip symmetric 归一化到 [-4,4]：
+            //    这是 Wav2Lip 模型推理必需的输入格式。旧实现传 apply_minmax=false
+            //    输出原始 dB 值（约 [-100,-20]），导致模型输入分布严重偏移、
+            //    对音频几乎无响应（诊断响应比仅 0.4%）。
             if (mel_config_dirty_) {
                 UpdateMelConfig();
             }
             auto mel = mel_extract.extract(
                 voiced.empty() ? frames : voiced, mel_config,
-                /*apply_minmax=*/false);
+                /*apply_minmax=*/true);
 
             if (mel.empty()) {
                 result.header.status = StatusCode::SKIP;
                 return result;
             }
 
-            // 7. 直接输出 dB 域 log-mel 行（1×80）。
-            //    注意：此处【不做】CMVN —— 单帧 CMVN 的均值就是帧本身，
-            //    输出恒为全零矩阵，是导致口型驱动失效的根因之一。
+            // 7. 输出已归一化的 mel 行（1×80，值域 [-4,4]）。
+            //    不再做 CMVN —— Wav2Lip symmetric 归一化已是模型期望的最终输入。
             result.payload = mel;
             result.header.status = StatusCode::OK;
 

@@ -326,10 +326,7 @@ struct Pipeline::Impl {
                     }
                     row->copyTo(win.row(f));
                 }
-
-                // ---- 5. 滚动上下文归一化（min-max + CMVN） ----
-                // 在丢弃旧行之前执行，使上下文包含窗口之前的历史
-                NormalizeWindow(win);
+                // ---- 5. Mel 已由提取器按 Wav2Lip 规范归一化到 [-4, 4] ----
 
                 // ---- 6. 丢弃窗口之前的旧行 + 裁剪上下文容量 ----
                 while (mel_first_seq_ < mel_start && !mel_rows_.empty()) {
@@ -428,47 +425,6 @@ struct Pipeline::Impl {
             for (int r = 0; r < rows_mat.rows; ++r) {
                 mel_rows_.push_back(rows_mat.row(r).clone());
                 ++mel_next_seq_;
-            }
-        }
-
-        /// @brief 滚动上下文归一化：min-max → CMVN（复刻离线参考实现）
-        ///
-        /// 统计范围为当前滚动缓冲（≈最近 3s 上下文），与参考实现的
-        /// 全音频统计近似等效，且随流式输入逐步收敛。
-        void NormalizeWindow(cv::Mat& win) const {
-            if (mel_rows_.empty() || win.empty()) return;
-
-            // 1. 拼接上下文 (N × mel_bins)
-            cv::Mat ctxmat(static_cast<int>(mel_rows_.size()),
-                           mel_bins_, CV_32F);
-            for (size_t i = 0; i < mel_rows_.size(); ++i) {
-                mel_rows_[i].copyTo(ctxmat.row(static_cast<int>(i)));
-            }
-
-            // 2. min-max 归一化（上下文统计 → 应用到窗口）
-            double mn = 0.0, mx = 0.0;
-            cv::minMaxLoc(ctxmat, &mn, &mx);
-            if (mx > mn) {
-                win = (win - mn) / (mx - mn);
-            }
-
-            // 3. CMVN（上下文 per-bin mean/std → 应用到窗口）
-            cv::Mat mean_row;
-            cv::reduce(ctxmat, mean_row, 0, cv::REDUCE_AVG);
-            const float kEps = 1e-10f;
-            for (int j = 0; j < mel_bins_; ++j) {
-                float mean = mean_row.at<float>(0, j);
-                double sum_sq = 0.0;
-                for (int i = 0; i < ctxmat.rows; ++i) {
-                    double d = ctxmat.at<float>(i, j) - mean;
-                    sum_sq += d * d;
-                }
-                float stddev = static_cast<float>(
-                    std::sqrt(sum_sq / ctxmat.rows));
-                float inv = (stddev > kEps) ? (1.0f / stddev) : 1.0f;
-                for (int f = 0; f < win.rows; ++f) {
-                    win.at<float>(f, j) = (win.at<float>(f, j) - mean) * inv;
-                }
             }
         }
     };

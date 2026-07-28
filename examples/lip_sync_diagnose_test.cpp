@@ -24,7 +24,6 @@
 #include "audio/audio_preemphasis.h"
 #include "audio/audio_rms_normalize.h"
 #include "audio/audio_mel_feature_extract.h"
-#include "audio/audio_cmvn.h"
 #include "core/face_detector.h"
 #include "core/face_aligner.h"
 #include "model/model_inferencer.h"
@@ -108,8 +107,11 @@ int main(int argc, char** argv) {
     auto frames = fr.frame(pe.process(rn.process(nr.process(audio.samples, audio.sampleRate))),
                            {400, 160});
     audio::MelFeatureExtract me;
-    audio::CMVN cmvn;
-    auto feat = cmvn.process(me.extract(frames, {512, 80, audio.sampleRate, 0, 8000}));
+    // Wav2Lip 官方 Mel 参数 + symmetric 归一化（不再用 CMVN）
+    audio::MelConfig mc;
+    mc.nFFT = 800; mc.nMels = 80; mc.sampleRate = audio.sampleRate;
+    mc.fMin = 55.0f; mc.fMax = 7600.0f; mc.winSize = 800;
+    auto feat = me.extract(frames, mc, /*apply_minmax=*/true);
     std::cout << "mel feat: " << feat.rows << "x" << feat.cols << std::endl;
 
     // 打印 Mel 特征自身变化量（确认音频输入确实在变化）

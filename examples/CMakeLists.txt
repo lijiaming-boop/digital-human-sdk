@@ -482,3 +482,12 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/dump_fusion_mask.cpp")
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     )
 endif()
+
+# Wav2Lip 模型响应诊断 — 静音 vs 语音对照，判断模型是否对音频有响应
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/lip_sync_response_test.cpp")
+    add_executable(lip_sync_response_test lip_sync_response_test.cpp)
+    target_link_libraries(lip_sync_response_test PRIVATE digital_human_core)
+    set_target_properties(lip_sync_response_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()

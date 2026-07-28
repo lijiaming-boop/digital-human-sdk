@@ -24,19 +24,19 @@ namespace core {
 struct AudioProcessorConfig {
     int sample_rate          = 16000;  ///< 采样率（Hz）
     int channels             = 1;       ///< 声道数
-    int frame_size           = 400;     ///< 帧长（samples @16kHz = 25ms）
-    int hop_size             = 160;     ///< 帧移（samples @16kHz = 10ms）
+    int frame_size           = 800;     ///< 帧长（samples @16kHz = 50ms）
+    int hop_size             = 200;     ///< 帧移（samples @16kHz = 12.5ms）
     int mel_bins             = 80;      ///< Mel 滤波器组数
-    int nfft                 = 512;     ///< FFT 点数
+    int nfft                 = 800;     ///< FFT 点数（Wav2Lip 官方: 800）
     int window_capacity      = 4800;    ///< 滑动窗口最大容量（samples, 300ms）
 
     /// @brief 根据当前采样率自适应计算帧参数
     void AutoConfigure(int target_sample_rate = 16000) {
         if (target_sample_rate <= 0) return;
         double ratio = static_cast<double>(target_sample_rate) / sample_rate;
-        frame_size  = static_cast<int>(400 * ratio);
-        hop_size    = static_cast<int>(160 * ratio);
-        nfft        = 512;
+        frame_size  = static_cast<int>(800 * ratio);
+        hop_size    = static_cast<int>(200 * ratio);
+        nfft        = 800;  // Wav2Lip 官方 n_fft
         sample_rate = target_sample_rate;
     }
 };

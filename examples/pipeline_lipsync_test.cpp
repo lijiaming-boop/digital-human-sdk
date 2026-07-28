@@ -149,8 +149,8 @@ int main(int argc, char* argv[]) {
     core::PipelineConfig cfg;
     cfg.target_fps        = target_fps;
     cfg.audio_sample_rate = audio.sampleRate;
-    cfg.audio_frame_size  = 400;
-    cfg.audio_hop_size    = 160;
+    cfg.audio_frame_size  = 800;
+    cfg.audio_hop_size    = 200;
     cfg.enable_frame_pacing = false;   // 离线生成：最大吞吐
 
     core::Pipeline pipeline;
@@ -265,7 +265,7 @@ int main(int argc, char* argv[]) {
     std::vector<double> energy_series;
     {
         const int64_t mel_span_samples = static_cast<int64_t>(
-            0.160 * audio.sampleRate);   // 与 16 帧 mel 窗同宽 (160ms)
+            0.200 * audio.sampleRate);   // 与 16 帧 mel 窗同宽 (200ms)
         int64_t hop_samples = static_cast<int64_t>(audio.sampleRate / target_fps);
         for (int64_t i = 0; i < frames_out; ++i) {
             int64_t b = i * hop_samples * audio.channels;

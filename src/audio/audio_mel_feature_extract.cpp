@@ -10,14 +10,36 @@ struct MelFeatureExtract::Impl {
     cv::Mat melFilterbank_;
     MelConfig cachedConfig_;
 
+    // ========================================================================
+    // Mel 滤波器组（Slaney area-normalized，对齐 librosa.filters.mel）
+    // ========================================================================
     cv::Mat createMelFilterbank(const MelConfig& config) {
         int nFreqBins = config.nFFT / 2 + 1;
 
+        // librosa 使用的 mel 公式（与 hzToMel 一致，Slaney 风格）
         auto hzToMel = [](float hz) {
-            return 2595.0f * std::log10(1.0f + hz / 700.0f);
+            const float fMin = 0.0f;
+            const float fSp  = 200.0f / 3.0f;
+            float mel = (hz - fMin) / fSp;
+            float minLogHz = 1000.0f;
+            float minLogMel = (minLogHz - fMin) / fSp;
+            float logstep = std::log(6.4f) / 27.0f;
+            if (hz >= minLogHz) {
+                mel = minLogMel + std::log(hz / minLogHz) / logstep;
+            }
+            return mel;
         };
         auto melToHz = [](float mel) {
-            return 700.0f * (std::pow(10.0f, mel / 2595.0f) - 1.0f);
+            const float fMin = 0.0f;
+            const float fSp  = 200.0f / 3.0f;
+            float hz = fMin + fSp * mel;
+            float minLogHz = 1000.0f;
+            float minLogMel = (minLogHz - fMin) / fSp;
+            float logstep = std::log(6.4f) / 27.0f;
+            if (mel >= minLogMel) {
+                hz = minLogHz * std::exp(logstep * (mel - minLogMel));
+            }
+            return hz;
         };
 
         float melMin = hzToMel(config.fMin);
@@ -37,7 +59,6 @@ struct MelFeatureExtract::Impl {
             float center = binPoints[m + 1];
             float right = binPoints[m + 2];
 
-            // 防除零：相邻频点重合时跳过该滤波器（权重保持为零）
             if (std::abs(center - left) < 1e-8f || std::abs(right - center) < 1e-8f) {
                 continue;
             }
@@ -45,12 +66,26 @@ struct MelFeatureExtract::Impl {
             float denom_left  = center - left;
             float denom_right = right - center;
 
+            // 累加三角形权重，用于 Slaney area-normalization
+            float enorm = 0.0f;
             for (int k = 0; k < nFreqBins; k++) {
                 float fk = static_cast<float>(k);
+                float w = 0.0f;
                 if (fk >= left && fk <= center) {
-                    filterbank.at<float>(m, k) = (fk - left) / denom_left;
+                    w = (fk - left) / denom_left;
                 } else if (fk >= center && fk <= right) {
-                    filterbank.at<float>(m, k) = (right - fk) / denom_right;
+                    w = (right - fk) / denom_right;
+                }
+                filterbank.at<float>(m, k) = w;
+                enorm += w;
+            }
+
+            // Slaney area-normalization：每个滤波器除以其面积，
+            // 使各 mel 通道能量一致（对齐 librosa 默认 norm='slaney'）
+            if (enorm > 1e-8f) {
+                float scale = 2.0f / enorm;
+                for (int k = 0; k < nFreqBins; k++) {
+                    filterbank.at<float>(m, k) *= scale;
                 }
             }
         }
@@ -58,6 +93,21 @@ struct MelFeatureExtract::Impl {
         return filterbank;
     }
 
+    // ========================================================================
+    // Hann 窗（对齐 scipy.signal.windows.hann / numpy.hanning）
+    // ========================================================================
+    std::vector<float> createHannWindow(int N) const {
+        // numpy.hanning: 0.5 - 0.5*cos(2*pi*n/(N-1)), n=0..N-1
+        std::vector<float> w(N);
+        for (int n = 0; n < N; ++n) {
+            w[n] = 0.5f - 0.5f * std::cos(2.0f * static_cast<float>(M_PI) * n / (N - 1));
+        }
+        return w;
+    }
+
+    // ========================================================================
+    // 主提取流程
+    // ========================================================================
     cv::Mat extract(const std::vector<std::vector<float>>& frames,
                     const MelConfig& config,
                     bool apply_minmax) {
@@ -72,7 +122,9 @@ struct MelFeatureExtract::Impl {
         int numFrames = static_cast<int>(frames.size());
         int nFFT = config.nFFT;
         int nFreqBins = nFFT / 2 + 1;
+        int winSize = (config.winSize > 0) ? config.winSize : nFFT;
 
+        // 滤波器缓存判定（含新增字段）
         bool rebuildFilter = melFilterbank_.empty()
             || cachedConfig_.nFFT != config.nFFT
             || cachedConfig_.nMels != config.nMels
@@ -85,56 +137,68 @@ struct MelFeatureExtract::Impl {
             cachedConfig_ = config;
         }
 
-        // Step 1: Copy all PCM frames to padded matrix (numFrames x nFFT)
+        // Hann 窗（窗长 = winSize，作用于每帧前 winSize 个样本，再零填充到 nFFT）
+        std::vector<float> hann = createHannWindow(winSize);
+
+        // Step 1: 加窗 + 零填充到 nFFT
         cv::Mat paddedFrames(numFrames, nFFT, CV_32F, cv::Scalar(0.0f));
         for (int i = 0; i < numFrames; i++) {
             float* row = paddedFrames.ptr<float>(i);
             const auto& frame = frames[i];
-            int copyLen = std::min(static_cast<int>(frame.size()), nFFT);
+            int copyLen = std::min(static_cast<int>(frame.size()), winSize);
             for (int j = 0; j < copyLen; j++) {
-                row[j] = frame[j];
+                row[j] = frame[j] * hann[j];
             }
         }
 
-        // Step 2: FFT on every row
+        // Step 2: FFT (逐行)
         cv::Mat fftResult;
         cv::dft(paddedFrames, fftResult, cv::DFT_COMPLEX_OUTPUT | cv::DFT_ROWS);
 
-        // Step 3: Power spectrum — keep only bins [0, nFreqBins)
-        cv::Mat powerSpec(numFrames, nFreqBins, CV_32F);
+        // Step 3: 振幅谱 |D|（Wav2Lip 用振幅谱而非功率谱）
+        cv::Mat magSpec(numFrames, nFreqBins, CV_32F);
         for (int i = 0; i < numFrames; i++) {
-            float* psRow = powerSpec.ptr<float>(i);
+            float* msRow = magSpec.ptr<float>(i);
             const float* fftRow = fftResult.ptr<float>(i);
             for (int k = 0; k < nFreqBins; k++) {
                 float real = fftRow[2 * k];
                 float imag = fftRow[2 * k + 1];
-                psRow[k] = real * real + imag * imag;
+                msRow[k] = std::sqrt(real * real + imag * imag);
             }
         }
 
-        // Step 4: Apply Mel filterbank
-        // melFilterbank_: (nMels x nFreqBins)  *  powerSpec^T: (nFreqBins x numFrames)
-        // melEnergies: (nMels x numFrames)
-        cv::Mat melEnergies = melFilterbank_ * powerSpec.t();
+        // Step 4: 应用 Mel 滤波器组
+        // melFilterbank_: (nMels x nFreqBins) * magSpec^T: (nFreqBins x numFrames)
+        cv::Mat melEnergies = melFilterbank_ * magSpec.t();
         cv::Mat melSpec = melEnergies.t();  // (numFrames x nMels)
 
-        // Step 5: Log compression (dB scale)
+        // Step 5: 振幅 → dB（Wav2Lip: 20*log10(max(min_level, |D|)) - ref_level_db）
+        // 注意：Wav2Lip 官方先对 |D| 取 dB，min_level_db 作为下限钳位
         for (int i = 0; i < numFrames; i++) {
             float* row = melSpec.ptr<float>(i);
             for (int m = 0; m < config.nMels; m++) {
-                row[m] = 10.0f * std::log10(std::max(row[m], 1e-10f));
+                float val = std::max(row[m], 1e-10f);
+                row[m] = 20.0f * std::log10(val) - config.refLevelDb;
             }
         }
 
-        // Step 6: Normalize to [0, 1]（可选 — 统计范围为本次输入全体帧。
-        // 流式单帧调用时必须跳过，否则每帧被独立拉伸，帧间动态被破坏）
+        // Step 6: 归一化
         if (apply_minmax) {
-            double minVal, maxVal;
-            cv::minMaxLoc(melSpec, &minVal, &maxVal);
-            if (maxVal > minVal) {
-                melSpec = (melSpec - minVal) / (maxVal - minVal);
+            // Wav2Lip symmetric 归一化：
+            //   mel = 10 * (mel_db - ref_level_db - min_level_db) / -min_level_db
+            //   mel = clip(mel, -max_abs_norm, +max_abs_norm)
+            // 注意：上面 Step 5 已减去 ref_level_db，这里再减 min_level_db 并缩放
+            float scale = (2.0f * config.maxAbsNorm) / (-config.minLevelDb);
+            for (int i = 0; i < numFrames; i++) {
+                float* row = melSpec.ptr<float>(i);
+                for (int m = 0; m < config.nMels; m++) {
+                    float v = (row[m] - config.minLevelDb) * scale
+                            - config.maxAbsNorm;
+                    row[m] = std::clamp(v, -config.maxAbsNorm, config.maxAbsNorm);
+                }
             }
         }
+        // apply_minmax=false: 输出 dB 域 log-mel（未归一化），供下游自定义归一化
 
         return melSpec;
     }

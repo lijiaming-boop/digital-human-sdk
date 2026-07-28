@@ -23,8 +23,8 @@ struct PipelineConfig {
     // ---- 音频参数 ----
     int audio_sample_rate         = 16000;   ///< 音频采样率（特征提取用）
     int audio_channels            = 1;        ///< 音频声道数
-    int audio_frame_size          = 400;      ///< 音频帧大小
-    int audio_hop_size            = 160;      ///< 音频帧移
+    int audio_frame_size          = 800;      ///< 音频帧大小
+    int audio_hop_size            = 200;      ///< 音频帧移
 
     // ---- 视频参数 ----
     double target_fps             = 30.0;     ///< 目标帧率
