@@ -29,7 +29,8 @@ struct CMVN::Impl {
                 sumSq += diff * diff;
             }
             float std = std::sqrt(sumSq / nFrames);
-            float invStd = 1.0f / std::max(std, kEps);
+            // 防除零/放大噪声：std 极小时不放大（使用条件赋值而非 max+除）
+            float invStd = (std > kEps) ? (1.0f / std) : 1.0f;
 
             for (int i = 0; i < nFrames; i++) {
                 float val = melSpectrogram.at<float>(i, j);

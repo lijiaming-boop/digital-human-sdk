@@ -10,6 +10,10 @@ struct AudioFramer::Impl {
     std::vector<double> hammingWindow_;
 
     std::vector<double> buildHammingWindow(int frameSize) {
+        if (frameSize < 2) {
+            // frameSize==1 时 denom=0 会除零，强制最小为 2
+            return {1.0};
+        }
         std::vector<double> window(frameSize);
         double denom = static_cast<double>(frameSize - 1);
         for (int i = 0; i < frameSize; i++) {

@@ -65,8 +65,10 @@ struct AudioSyncScheduler::Impl {
         last_consumed_frames = consumedFrames;
 
         if (deltaFrames > 0) {
-            int64_t samplesConsumed = deltaFrames * config.audio_channels;
-            av_sync.UpdateAudioClock(samplesConsumed);
+            // 注意：AVSync::UpdateAudioClock 内部用 samples / sample_rate 计算时间
+            // GetConsumedFrames() 返回帧数（每帧 = channels 个样本），而 sample_rate
+            // 是每声道采样率。deltaFrames 直接对应 sample_rate 分母，无需再乘 channels。
+            av_sync.UpdateAudioClock(deltaFrames);
         }
     }
 

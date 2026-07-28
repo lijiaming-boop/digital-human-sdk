@@ -130,7 +130,20 @@ using AudioRawPacket        = Packet<std::vector<float>>;       ///< PCM float �
 using MelFeaturePacket      = Packet<cv::Mat>;                  ///< Mel 频谱特征
 using VideoFramePacket      = Packet<cv::Mat>;                  ///< 原始视频帧
 using ProcessedFacePacket   = Packet<ProcessedFaceData>;        ///< 处理后的人脸数据
-using InferenceOutputPacket = Packet<ncnn::Mat>;                ///< 模型推理输出
+
+// ============================================================================
+// 推理输出数据（模型输出 + 关联人脸数据，用于融合流水线）
+// ============================================================================
+
+/// @brief 推理输出数据，包含 Wav2Lip 模型输出和关联的原始人脸数据
+struct InferenceOutputData {
+    ncnn::Mat          model_output;      ///< Wav2Lip 模型输出 (RGB float)
+    ProcessedFaceData  face_data;         ///< 关联的人脸数据（用于下游融合）
+
+    bool IsValid() const { return !model_output.empty(); }
+};
+
+using InferenceOutputPacket = Packet<InferenceOutputData>;       ///< 模型推理输出（含人脸数据）
 
 // ============================================================================
 // 渲染任务数据（模型输出 + 原始人脸 + 变换矩阵 + 遮罩）
@@ -142,6 +155,7 @@ struct RenderTaskData {
     cv::Mat            original_face;     ///< 原始人脸 (BGR uint8)
     cv::Mat            M_inv;             ///< 逆仿射变换矩阵 2×3
     cv::Mat            face_mask;         ///< 口唇遮罩 (CV_32FC1)
+    cv::Rect           face_rect;         ///< 人脸在原图中的矩形（ROI 渲染用，可空）
 
     bool IsValid() const {
         return !model_output.empty() && !original_face.empty()

@@ -159,7 +159,7 @@ int main() {
         // 440Hz tone: energy ≈ 400*0.125 ≈ 50 >> 0.01 ✓
         // ZCR ≈ 0.055 which is < zcrMin=0.1 ✗ → filtered out with defaults
         std::cout << "  Result: " << result.size() << " / 5 frames kept";
-        bool ok = (result.size() == 5);
+        ok = (result.size() == 5);
         std::cout << (ok ? "\n  [PASS]" : "\n  [FAIL]")
                   << " Default params work for 440Hz tone" << std::endl;
     }

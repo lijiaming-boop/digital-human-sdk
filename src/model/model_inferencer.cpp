@@ -4,6 +4,7 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
 #include <iostream>
 #include <limits>
 #include <mutex>
@@ -11,6 +12,30 @@
 #include <vector>
 
 #include <ncnn/net.h>
+
+namespace {
+
+// Only set defaults before the first OpenMP region; explicit process settings
+// always take precedence over SDK defaults.
+void ConfigureOpenMPPassiveWait() {
+    if (std::getenv("OMP_WAIT_POLICY") == nullptr) {
+#ifdef _WIN32
+        _putenv_s("OMP_WAIT_POLICY", "PASSIVE");
+#else
+        setenv("OMP_WAIT_POLICY", "PASSIVE", 0);
+#endif
+    }
+    // GCC/libgomp-specific: disable the default long barrier spin.
+    if (std::getenv("GOMP_SPINCOUNT") == nullptr) {
+#ifdef _WIN32
+        _putenv_s("GOMP_SPINCOUNT", "0");
+#else
+        setenv("GOMP_SPINCOUNT", "0", 0);
+#endif
+    }
+}
+
+}  // namespace
 
 namespace digital_human {
 namespace model {
@@ -39,7 +64,7 @@ struct ModelInferencer::Impl {
 
     // ---- 性能配置 ----
     int   num_threads      = 2;      ///< CPU 线程数（autoTune 后确定）
-    bool  use_gpu          = false;  ///< 是否启用 Vulkan GPU 加速
+    bool  use_gpu          = true;   ///< 是否启用 Vulkan GPU 加速
     float target_latency_ms = 50.0f; ///< 目标推理延迟阈值（毫秒）
 
     // ---- 模型 IO blob 名称（与 Wav2Lip-SD-GAN-opt.param 一致） ----
@@ -48,7 +73,8 @@ struct ModelInferencer::Impl {
     static constexpr const char* kOutputName = "output";
 
     // ---- 默认输入形状（与 model_loader 保持一致） ----
-    static constexpr int kAudioW = 80;
+    // 音频: 80 mel bins × 16 时间帧 (ncnn: w=时间, h=bins)
+    static constexpr int kAudioW = 16;
     static constexpr int kAudioH = 80;
     static constexpr int kAudioC = 1;
     static constexpr int kFaceW  = 96;
@@ -69,6 +95,37 @@ struct ModelInferencer::Impl {
     float       min_latency_ms     = std::numeric_limits<float>::max();
     float       max_latency_ms     = 0.0f;
 
+    // Retain source paths so a pre-start thread-count change can rebuild ncnn
+    // layers with the new load-time configuration.
+    std::string param_path;
+    std::string bin_path;
+
+    bool loadNet(int threads, bool gpu) {
+#if !NCNN_VULKAN
+        if (gpu) {
+            std::cerr << "[ModelInferencer] ncnn was built without Vulkan support" << std::endl;
+            return false;
+        }
+#endif
+        net.clear();
+        // Winograd/GEMM pipeline construction happens in load_param/load_model.
+        // These options therefore must be assigned before either load call.
+        net.opt.num_threads = gpu ? 1 : threads;
+        net.opt.use_vulkan_compute = gpu;
+
+        if (net.load_param(param_path.c_str()) != 0) {
+            std::cerr << "[ModelInferencer] ?? param ??: "
+                      << param_path << std::endl;
+            return false;
+        }
+        if (net.load_model(bin_path.c_str()) != 0) {
+            std::cerr << "[ModelInferencer] ?? bin ??: "
+                      << bin_path << std::endl;
+            return false;
+        }
+        return true;
+    }
+
     // ========================================================================
     // 初始化
     // ========================================================================
@@ -82,13 +139,18 @@ struct ModelInferencer::Impl {
      */
     bool doInit(const std::string& param_path, const std::string& bin_path) {
         // ---- 加载模型 ----
-        if (net.load_param(param_path.c_str()) != 0) {
-            std::cerr << "[ModelInferencer] 加载 param 失败: " << param_path << std::endl;
-            return false;
-        }
-        if (net.load_model(bin_path.c_str()) != 0) {
-            std::cerr << "[ModelInferencer] 加载 bin 失败: " << bin_path << std::endl;
-            return false;
+        this->param_path = param_path;
+        this->bin_path = bin_path;
+        // This must run before the first OpenMP parallel region.
+        ConfigureOpenMPPassiveWait();
+        // Select Vulkan pipelines before loading the model; fall back on CPU.
+        if (!loadNet(num_threads, use_gpu)) {
+            if (!use_gpu || !loadNet(num_threads, false)) {
+                return false;
+            }
+            use_gpu = false;
+            std::cerr << "[ModelInferencer] GPU unavailable; falling back to CPU"
+                      << std::endl;
         }
 
         // ---- warmup ----
@@ -97,12 +159,22 @@ struct ModelInferencer::Impl {
         audio_in.fill(0.0f);
         face_in.fill(0.0f);
 
-        net.opt.num_threads = 2;
+        net.opt.num_threads = num_threads;
         ncnn::Extractor ex = net.create_extractor();
         ex.input(kAudioInput, audio_in);
         ex.input(kFaceInput, face_in);
         ncnn::Mat warmup_out;
         int ret = ex.extract(kOutputName, warmup_out);
+        if (ret != 0 && use_gpu) {
+            std::cerr << "[ModelInferencer] GPU warmup failed; falling back to CPU" << std::endl;
+            if (loadNet(num_threads, false)) {
+                use_gpu = false;
+                ncnn::Extractor cpu_ex = net.create_extractor();
+                cpu_ex.input(kAudioInput, audio_in);
+                cpu_ex.input(kFaceInput, face_in);
+                ret = cpu_ex.extract(kOutputName, warmup_out);
+            }
+        }
         if (ret != 0) {
             std::cerr << "[ModelInferencer] warmup 推理失败 (ret="
                       << ret << ")，模型可能不兼容" << std::endl;
@@ -110,7 +182,8 @@ struct ModelInferencer::Impl {
         }
 
         // ---- 自动调优 ----
-        autoTune();
+        // Runtime-only thread tuning is invalid for Winograd/GEMM layers.
+        // Use SetThreadCount before Start() to reload with a measured value.
 
         initialized = true;
         return true;
@@ -389,7 +462,23 @@ int ModelInferencer::GetThreadCount() const {
 
 void ModelInferencer::SetThreadCount(int n) {
     int max_t = static_cast<int>(std::thread::hardware_concurrency());
-    impl_->num_threads = std::clamp(n, 1, max_t);
+    if (max_t < 1) max_t = 4;  // hardware_concurrency() 可能返回 0
+    const int requested_threads = std::clamp(n, 1, max_t);
+    if (requested_threads == impl_->num_threads) {
+        return;
+    }
+
+    // Safe only while no Infer call is executing (normally before Start()).
+    // Reload instead of changing net.opt so load-time convolution pipelines
+    // receive the requested thread count.
+    if (impl_->initialized && !impl_->use_gpu) {
+        if (!impl_->loadNet(requested_threads, false)) {
+            std::cerr << "[ModelInferencer] failed to reload model for "
+                      << requested_threads << " threads" << std::endl;
+            return;
+        }
+    }
+    impl_->num_threads = requested_threads;
 
     // 启用 GPU 时线程数设置不生效
     if (impl_->use_gpu) {

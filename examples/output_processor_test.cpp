@@ -65,6 +65,19 @@ static ncnn::Mat createModelOutput(int w = 448, int h = 96, bool extreme = false
     return mat;
 }
 
+static ncnn::Mat createConstantModelOutput(float r, float g, float b,
+                                           int w = 96, int h = 96) {
+    ncnn::Mat mat(w, h, 3);
+    float values[3] = {r, g, b};
+    for (int c = 0; c < 3; ++c) {
+        float* ch = mat.channel(c);
+        for (int i = 0; i < w * h; ++i) {
+            ch[i] = values[c];
+        }
+    }
+    return mat;
+}
+
 /// @brief 生成模拟人脸图像 (BGR uint8)
 static cv::Mat createFaceImage(int w = 192, int h = 192, uchar val = 128) {
     cv::Mat img(h, w, CV_8UC3, cv::Scalar(val, val, val));
@@ -537,6 +550,45 @@ static void testNonDefaultSizes() {
 // 主函数
 // ============================================================================
 
+static void testAlignedMaskIsWarpedBeforeFusion() {
+    TEST_NAME("Test 13: aligned mouth mask inverse warp");
+
+    OutputProcessor proc;
+
+    ncnn::Mat model_out = createConstantModelOutput(0.10f, 0.80f, 0.20f);
+    cv::Mat original(192, 192, CV_8UC3, cv::Scalar(200, 200, 200));
+    cv::Mat aligned_mask = cv::Mat::zeros(96, 96, CV_32FC1);
+    cv::rectangle(aligned_mask, cv::Rect(80, 80, 12, 12), cv::Scalar(1.0f), -1);
+
+    cv::Mat M_inv = (cv::Mat_<double>(2, 3) <<
+        1.0, 0.0, 20.0,
+        0.0, 1.0, 20.0);
+
+    cv::Mat result = proc.Process(model_out, original, aligned_mask, M_inv);
+    TEST_CHECK(!result.empty(), "13.1 Process accepts aligned-space mask");
+
+    cv::Vec3b applied = result.at<cv::Vec3b>(106, 106);
+    int applied_diff =
+        std::abs(static_cast<int>(applied[0]) - 200) +
+        std::abs(static_cast<int>(applied[1]) - 200) +
+        std::abs(static_cast<int>(applied[2]) - 200);
+    TEST_CHECK(applied_diff > 40,
+               "13.2 lip change appears at inverse-warped mouth position");
+
+    cv::Vec3b outside = result.at<cv::Vec3b>(180, 180);
+    int outside_diff =
+        std::abs(static_cast<int>(outside[0]) - 200) +
+        std::abs(static_cast<int>(outside[1]) - 200) +
+        std::abs(static_cast<int>(outside[2]) - 200);
+    int outside_sum = static_cast<int>(outside[0]) +
+                      static_cast<int>(outside[1]) +
+                      static_cast<int>(outside[2]);
+    TEST_CHECK(outside_diff <= 6,
+               "13.3 stretched mask no longer darkens original-space corner");
+    TEST_CHECK(outside_sum > 540,
+               "13.4 fusion does not mix black warp background into lips");
+}
+
 int main() {
     std::cout << "==============================================" << std::endl;
     std::cout << "  OutputProcessor 模块验收测试"                  << std::endl;
@@ -554,6 +606,7 @@ int main() {
     testMoveSemantics();
     testExtremeValues();
     testNonDefaultSizes();
+    testAlignedMaskIsWarpedBeforeFusion();
 
     // ==========================================
     // 汇总

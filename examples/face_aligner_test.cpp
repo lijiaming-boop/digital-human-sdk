@@ -47,7 +47,7 @@ void testAlignByEyes(const cv::Mat& image,
                                          static_cast<float>(p.y)));
     }
 
-    FaceAlignigner aligner;
+    FaceAligner aligner;
 
     for (int size : {96, 128, 256}) {
         cv::Mat aligned = aligner.align(image, landmarks, size);
@@ -86,7 +86,7 @@ void testAlignByRect(const cv::Mat& image,
             cv::Point2f(static_cast<float>(p.x), static_cast<float>(p.y)));
     }
 
-    FaceAlignigner aligner;
+    FaceAligner aligner;
 
     for (double ratio : {0.0, 0.15, 0.3}) {
         FaceAlignerResult result =
@@ -137,7 +137,7 @@ void testTransformLandmarks(const std::vector<cv::Point>& landmarks_pts) {
             cv::Point2f(static_cast<float>(p.x), static_cast<float>(p.y)));
     }
 
-    FaceAlignigner aligner;
+    FaceAligner aligner;
 
     cv::Mat identity = (cv::Mat_<double>(2, 3) << 1.0, 0.0, 0.0, 0.0, 1.0, 0.0);
     std::vector<cv::Point2f> transformed =
@@ -176,7 +176,7 @@ void testTransformLandmarks(const std::vector<cv::Point>& landmarks_pts) {
 void testEdgeCases() {
     std::cout << "\n[Test 4] Edge cases..." << std::endl;
 
-    FaceAlignigner aligner;
+    FaceAligner aligner;
     cv::Mat empty_img;
     std::vector<cv::Point2f> empty_lm;
 
@@ -224,7 +224,7 @@ void testAlignByRectVisual(const cv::Mat& image,
             cv::Point2f(static_cast<float>(p.x), static_cast<float>(p.y)));
     }
 
-    FaceAlignigner aligner;
+    FaceAligner aligner;
     FaceAlignerResult result =
         aligner.alignByRect(image, landmarks, 256, faces[0], 0.15);
 
@@ -303,7 +303,7 @@ int main(int argc, char** argv) {
     }
     std::cout << "Image size: " << img.cols << "x" << img.rows << std::endl;
 
-    DigitalHuman::core::FaceDetector detector;
+    digital_human::core::FaceDetector detector;
     std::cout << "\n[0] Loading model and detecting face..." << std::endl;
     if (!detector.loadModel(model_path)) {
         std::cerr << "Model load failed" << std::endl;

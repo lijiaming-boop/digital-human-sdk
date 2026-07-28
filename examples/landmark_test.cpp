@@ -5,7 +5,7 @@
 #include "core/face_detector.h"
 
 namespace fs = std::filesystem;
-using namespace DigitalHuman::core;
+using namespace digital_human::core;
 
 const cv::Scalar GREEN(0, 255, 0);
 const cv::Scalar RED(0, 0, 255);

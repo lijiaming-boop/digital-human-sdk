@@ -141,6 +141,31 @@ public:
                     const cv::Mat& face_mask,
                     const cv::Mat& M_inv);
 
+    /**
+     * @brief 完整输出处理管道（ROI 加速版）
+     *
+     * 与 Process 功能一致，但逆变换/融合/锐化/色彩混合仅在人脸 ROI
+     * 内执行，最后将 ROI 贴回原图。大图（如 1920×1384）下渲染耗时
+     * 与全图处理相比可降低一个数量级。
+     *
+     * ROI 由 M_inv 将 96×96 对齐人脸四角投影到原图坐标后取包围盒，
+     * 再向外扩展 margin_ratio 得到；face_rect 提供额外约束（可为空）。
+     *
+     * @param model_output 模型输出的 ncnn::Mat
+     * @param original_face 原始人脸图像 (BGR uint8)
+     * @param face_mask     口唇区域遮罩 (CV_32FC1，96×96 对齐空间或全图)
+     * @param M_inv         逆仿射变换矩阵
+     * @param face_rect     人脸在原图中的矩形（可空，仅作 ROI 参考）
+     * @param margin_ratio  ROI 外扩比例（默认 0.25）
+     * @return cv::Mat      最终处理完成的图像
+     */
+    cv::Mat ProcessROI(const ncnn::Mat& model_output,
+                       const cv::Mat& original_face,
+                       const cv::Mat& face_mask,
+                       const cv::Mat& M_inv,
+                       const cv::Rect& face_rect = cv::Rect(),
+                       float margin_ratio = 0.25f);
+
 private:
     struct Impl;
     std::unique_ptr<Impl> impl_;

@@ -156,7 +156,7 @@ public:
     // ==================== 错误处理 ====================
 
     /// @brief 获取最后一次错误消息
-    const char* GetLastErrorMsg() const;
+    std::string GetLastErrorMsg() const;
 
 private:
     struct Impl;

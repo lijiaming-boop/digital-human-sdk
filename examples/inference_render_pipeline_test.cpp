@@ -8,10 +8,7 @@
  *       │
  *       ▼
  *   InferenceWorker (模型推理)
- *       │  InferenceOutputPacket (ncnn::Mat)
- *       ▼
- *   RenderQueue (ThreadSafeQueue)
- *       │  RenderPacket (组合 ncnn::Mat + 人脸数据)
+ *       │  InferenceOutputPacket (含人脸数据)
  *       ▼
  *   RenderThread (融合→同步→输出)
  *       │  OutputFramePacket (cv::Mat)
@@ -78,77 +75,37 @@ static ProcessedFaceData makeFace() {
 // ============================================================================
 // Test 1: 推理→渲染 单帧跑通
 //
-// 在无模型环境下，使用 RenderThread 接收推理输出，
-// 验证数据能从 InferenceWorker 的输入队列流到 RenderThread 的输出
+// 验证数据能从 InferenceWorker 流入 RenderThread 并正常停止
 // ============================================================================
 static void testSingleFrameEndToEnd() {
     TEST_NAME("T1: 推理→渲染 单帧流");
 
     // ---- 队列 ----
-    ThreadSafeQueue<InferenceTask>         infer_input_queue;
-    ThreadSafeQueue<InferenceOutputPacket> infer_output_queue(30);
-    ThreadSafeQueue<RenderPacket>          render_input_queue(30);
-    ThreadSafeQueue<OutputFramePacket>     render_output_queue;
+    ThreadSafeQueue<InferenceTask>          infer_input_queue;
+    ThreadSafeQueue<InferenceOutputPacket>  infer_output_queue(30);
+    ThreadSafeQueue<OutputFramePacket>      render_output_queue;
 
     // ---- 推理线程 ----
     InferenceWorker worker("InferForRender");
     InferenceWorkerConfig wcfg;
     wcfg.pop_timeout_ms = 50;
-    wcfg.max_retries    = 0;  // 不重试，快速失败
+    wcfg.max_retries    = 0;
     worker.SetConfig(wcfg);
     worker.SetInputQueue(&infer_input_queue);
     worker.SetOutputQueue(&infer_output_queue);
 
-    // ---- 渲染线程 ----
+    // ---- 渲染线程（直接消费 InferenceOutputPacket） ----
     RenderThread renderer("RenderFromInfer");
     RenderConfig rcfg;
     rcfg.enable_frame_pacing = false;
     rcfg.enable_audio_sync   = false;
     rcfg.pop_timeout_ms      = 50;
     renderer.SetConfig(rcfg);
+    renderer.SetInputQueue(&infer_output_queue);
+    renderer.SetOutputQueue(&render_output_queue);
 
-    // 创建 OutputProcessor 实例供渲染线程使用
     OutputProcessor output_proc;
     renderer.SetOutputProcessor(&output_proc);
-
-    // 推理输出 → 渲染输入：需要中间桥接线程
-    // 从 infer_output_queue 取 ncnn::Mat，打包为 RenderPacket 送入 render_input_queue
-    ThreadSafeQueue<InferenceOutputPacket> bridge_queue(30);
-    worker.SetOutputQueue(&bridge_queue);
-
-    // 桥接线程
-    std::atomic<int> bridge_count{0};
-    std::thread bridge_thread([&]() {
-        while (true) {
-            InferenceOutputPacket pkt;
-            if (!bridge_queue.WaitAndPop(pkt, 100)) continue;
-            if (pkt.header.IsEOS()) {
-                render_input_queue.Push(RenderPacket::EOS());
-                break;
-            }
-            if (pkt.header.IsFatal()) {
-                render_input_queue.Push(RenderPacket::Fatal());
-                break;
-            }
-            if (!pkt.header.IsOK()) continue;
-
-            // 打包为 RenderTaskData
-            RenderTaskData rdata;
-            rdata.model_output  = pkt.payload;
-            rdata.original_face = cv::Mat(480, 640, CV_8UC3, cv::Scalar(0, 0, 0));
-            rdata.M_inv         = cv::Mat::eye(2, 3, CV_32F);
-            rdata.face_mask     = cv::Mat(480, 640, CV_32FC1, cv::Scalar(1.0f));
-
-            auto rpkt = RenderPacket::Make(std::move(rdata),
-                                            pkt.header.pts_ms,
-                                            pkt.header.seq_id);
-            render_input_queue.Push(std::move(rpkt));
-            bridge_count.fetch_add(1, std::memory_order_relaxed);
-        }
-    });
-
-    renderer.SetInputQueue(&render_input_queue);
-    renderer.SetOutputQueue(&render_output_queue);
 
     // ---- 启动 ----
     worker.Start();
@@ -162,21 +119,16 @@ static void testSingleFrameEndToEnd() {
     infer_input_queue.Push(std::move(task));
     infer_input_queue.Push(InferenceTask::EOS());
 
-    // ---- 等待渲染结果 ----
+    // ---- 等待 ----
     OutputFramePacket out;
     bool got_output = render_output_queue.WaitAndPop(out, 2000);
 
     // ---- 停止 ----
     infer_input_queue.Stop();
-    bridge_thread.join();
     renderer.Shutdown();
     worker.Shutdown();
 
-    // 无模型时推理返回空，桥接线程应收到 EOS 后停止
-    // 渲染线程应无帧输出（推理失败）
-    // 但整个链路不应崩溃
-    TEST_CHECK(true, "T1: 链路跑通不崩溃 (推断输出="
-               << bridge_count.load() << ")");
+    TEST_CHECK(true, "T1: 链路跑通不崩溃");
 }
 
 // ============================================================================
@@ -185,10 +137,9 @@ static void testSingleFrameEndToEnd() {
 static void testMultiFramePipeline() {
     TEST_NAME("T2: 多帧流水线 数据流");
 
-    ThreadSafeQueue<InferenceTask>         infer_input;
-    ThreadSafeQueue<InferenceOutputPacket> bridge_queue(30);
-    ThreadSafeQueue<RenderPacket>          render_input(30);
-    ThreadSafeQueue<OutputFramePacket>     render_output;
+    ThreadSafeQueue<InferenceTask>          infer_input;
+    ThreadSafeQueue<InferenceOutputPacket>  infer_output(30);
+    ThreadSafeQueue<OutputFramePacket>      render_output;
 
     // ---- 推理 ----
     InferenceWorker worker;
@@ -197,42 +148,20 @@ static void testMultiFramePipeline() {
     wcfg.max_retries    = 0;
     worker.SetConfig(wcfg);
     worker.SetInputQueue(&infer_input);
-    worker.SetOutputQueue(&bridge_queue);
+    worker.SetOutputQueue(&infer_output);
 
-    // ---- 渲染 ----
+    // ---- 渲染（直接消费 InferenceOutputPacket） ----
     RenderThread renderer;
     RenderConfig rcfg;
     rcfg.enable_frame_pacing = false;
     rcfg.enable_audio_sync   = false;
     rcfg.pop_timeout_ms      = 10;
     renderer.SetConfig(rcfg);
-    renderer.SetInputQueue(&render_input);
+    renderer.SetInputQueue(&infer_output);
     renderer.SetOutputQueue(&render_output);
 
     OutputProcessor output_proc;
     renderer.SetOutputProcessor(&output_proc);
-
-    // ---- 桥接 ----
-    std::atomic<int> bridge_cnt{0};
-    std::thread bridge([&]() {
-        while (true) {
-            InferenceOutputPacket pkt;
-            if (!bridge_queue.WaitAndPop(pkt, 100)) continue;
-            if (pkt.header.IsEOS()) {
-                render_input.Push(RenderPacket::EOS());
-                break;
-            }
-            if (!pkt.header.IsOK()) continue;
-            RenderTaskData rd;
-            rd.model_output  = pkt.payload;
-            rd.original_face = cv::Mat(480, 640, CV_8UC3);
-            rd.M_inv         = cv::Mat::eye(2, 3, CV_32F);
-            rd.face_mask     = cv::Mat(480, 640, CV_32FC1, cv::Scalar(1.0f));
-            render_input.Push(RenderPacket::Make(std::move(rd),
-                               pkt.header.pts_ms, pkt.header.seq_id));
-            bridge_cnt.fetch_add(1);
-        }
-    });
 
     worker.Start();
     renderer.Start();
@@ -256,14 +185,10 @@ static void testMultiFramePipeline() {
     }
 
     infer_input.Stop();
-    bridge.join();
     renderer.Shutdown();
     worker.Shutdown();
 
-    // 无模型 → 推理全部失败 → 桥接 0 帧 → 渲染 0 帧
-    // 链路完整性验证：不崩溃、正常停止
-    TEST_CHECK(true, "T2: 5 帧链路跑通 (桥接=" << bridge_cnt.load()
-               << " 输出=" << out_count << ")");
+    TEST_CHECK(true, "T2: 5 帧链路跑通 (输出=" << out_count << ")");
 }
 
 // ============================================================================
@@ -319,10 +244,8 @@ static void testOutputProcessorIntegration() {
 static void testFullPipelineWithOutput() {
     TEST_NAME("T4: 全链路推理→渲染→输出");
 
-    // 使用 OutputProcessor 生成渲染结果
     OutputProcessor proc;
 
-    // 制造模型输出
     ncnn::Mat model_out(448, 96, 3);
     model_out.fill(0.5f);
 
@@ -336,7 +259,6 @@ static void testFullPipelineWithOutput() {
     TEST_CHECK(result.cols == 640, "宽度=640");
     TEST_CHECK(result.type() == CV_8UC3, "类型=BGR uint8");
 
-    // 模拟渲染线程的帧回调
     int callback_count = 0;
     auto cb = [&](const cv::Mat& frame, int64_t pts, int64_t fid) {
         callback_count++;

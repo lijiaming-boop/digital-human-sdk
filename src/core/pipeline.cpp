@@ -2,34 +2,21 @@
 
 #include <algorithm>
 #include <cmath>
+#include <deque>
 #include <iostream>
 #include <sstream>
 #include <thread>
 #include <vector>
 
-#include "audio/audio_framer.h"
-#include "audio/audio_vad.h"
-#include "audio/audio_preemphasis.h"
-#include "audio/audio_rms_normalize.h"
-#include "audio/audio_noise_reduction.h"
-#include "audio/audio_mel_feature_extract.h"
-#include "audio/audio_cmvn.h"
-#include "core/face_detector.h"
-#include "core/face_aligner.h"
-#include "core/face_mask_generator.h"
+#include "core/audio_processor.h"
+#include "core/video_processor.h"
+#include "core/inference_worker.h"
+#include "core/render_thread.h"
 #include "model/model_inferencer.h"
 #include "model/output_processor.h"
 
 namespace digital_human {
 namespace core {
-
-using audio::AudioFramer;
-using audio::VoiceActivityDetector;
-using audio::PreEmphasis;
-using audio::RMSNormalize;
-using audio::NoiseReduction;
-using audio::MelFeatureExtract;
-using audio::CMVN;
 
 // ============================================================================
 // PipelineMetrics 实现
@@ -51,7 +38,7 @@ std::string PipelineMetrics::ToString() const {
 }
 
 // ============================================================================
-// Pipeline::Impl — 内部实现
+// Pipeline::Impl — 内部实现（使用独立类实例）
 // ============================================================================
 
 struct Pipeline::Impl {
@@ -60,99 +47,113 @@ struct Pipeline::Impl {
     std::atomic<bool> initialized{false};
     std::atomic<bool> running{false};
     std::atomic<bool> paused{false};
+    /// 标记 Pipeline 是否已被 Stop() 终止。
+    /// 终止后 Start() 会被拒绝（一次性对象语义）：
+    /// 队列已 Stop 不可恢复、worker 已退出无法重启。
+    std::atomic<bool> terminated{false};
 
     // ---- 队列 ----
-    ThreadSafeQueue<AudioRawPacket>      audio_raw_queue;
-    ThreadSafeQueue<MelFeaturePacket>    mel_feature_queue;
-    ThreadSafeQueue<VideoFramePacket>    video_raw_queue;
-    ThreadSafeQueue<ProcessedFacePacket> processed_face_queue;
+    ThreadSafeQueue<AudioRawPacket>       audio_raw_queue;
+    ThreadSafeQueue<MelFeaturePacket>     mel_feature_queue;
+    ThreadSafeQueue<VideoFramePacket>     video_raw_queue;
+    ThreadSafeQueue<ProcessedFacePacket>  processed_face_queue;
+    ThreadSafeQueue<InferenceTask>        inference_task_queue;
     ThreadSafeQueue<InferenceOutputPacket> inference_output_queue;
-    ThreadSafeQueue<OutputFramePacket>   output_frame_queue;
+    ThreadSafeQueue<OutputFramePacket>     output_frame_queue;
 
-    // ---- 同步模块 ----
+    // ---- 独立处理线程实例 ----
+    std::unique_ptr<AudioProcessor>      audio_processor;
+    std::unique_ptr<VideoProcessor>      video_processor;
+    std::unique_ptr<InferenceWorker>     inference_worker;
+    std::unique_ptr<RenderThread>        render_thread;
+
+    // ---- 音视频匹配线程（读取 mel + face，生成 InferenceTask） ----
+    // 该线程负责 PTS 匹配 + 人脸缓存，是必要组件，不重复任何独立类
+    std::unique_ptr<ThreadBase> matcher_thread;
+
+    // ---- 外部模块（由 Pipeline 管理生命周期） ----
+    model::ModelInferencer   model_inferencer;
+    model::OutputProcessor   output_processor;
+
+    // ---- 同步模块（用于指标查询，RenderThread 使用内置 FrameScheduler） ----
     AVSync         av_sync;
     FrameScheduler frame_scheduler;
 
-    // ---- 音频处理模块（每个线程拥有独立实例） ----
-    NoiseReduction      noise_reduction;
-    AudioFramer         audio_framer;
-    VoiceActivityDetector vad;
-    PreEmphasis         pre_emphasis;
-    RMSNormalize        rms_normalize;
-    MelFeatureExtract   mel_extract;
-    CMVN                cmvn;
-
-    // ---- 视频处理模块（每个线程拥有独立实例） ----
-    DigitalHuman::core::FaceDetector     face_detector;
-    digital_human::core::FaceAlignigner  face_aligner;
-    DigitalHuman::Core::FaceMaskGenerator face_mask_gen;
-
-    // ---- 推理和后处理模块 ----
-    model::ModelInferencer  model_inferencer;
-    model::OutputProcessor  output_processor;
-
-    // ---- 工作线程 ----
-    std::unique_ptr<ThreadBase> audio_producer_thread;
-    std::unique_ptr<ThreadBase> audio_processor_thread;
-    std::unique_ptr<ThreadBase> video_producer_thread;
-    std::unique_ptr<ThreadBase> video_processor_thread;
-    std::unique_ptr<ThreadBase> inference_thread;
-    std::unique_ptr<ThreadBase> output_thread;
-    std::unique_ptr<ThreadBase> render_thread;
-
     // ---- 指标统计 ----
+    // 输入计数由 Pipeline 本对象维护（PushAudio/PushVideo 写入）。
+    // 输出/丢弃/推理计数从各 worker 的 GetMetrics() 实时聚合，避免重复维护
+    // 一套未接线的原子计数（旧实现的 bug：始终为 0）。
     std::atomic<int64_t> total_frames_in{0};
-    std::atomic<int64_t> total_frames_out{0};
-    std::atomic<int64_t> frames_dropped{0};
-    std::atomic<int64_t> frames_skipped{0};
     std::atomic<int64_t> audio_packets_in{0};
     std::atomic<int64_t> video_packets_in{0};
-    std::atomic<int64_t> inference_count{0};
 
-    // ---- 性能计数 ----
-    // 使用微秒累积（int64_t），解决 C++17 中 atomic<double> 无 fetch_add 的问题
+    // ---- 性能计数（由 MatcherThread 在消费 mel/face 包时累加 cost_ms） ----
+    // 使用 int64_t 微秒避免 atomic<double> 不支持 fetch_add 的问题。
     std::atomic<int64_t> total_audio_process_us{0};
     std::atomic<int64_t> audio_process_count{0};
     std::atomic<int64_t> total_video_process_us{0};
     std::atomic<int64_t> video_process_count{0};
-    std::atomic<int64_t> total_inference_us{0};
-    std::atomic<int64_t> inference_count_val{0};
-    std::atomic<int64_t> total_output_us{0};
-    std::atomic<int64_t> output_count{0};
 
     // ---- 输入标记 ----
     std::atomic<bool> audio_eos{false};
     std::atomic<bool> video_eos{false};
 
+    // ---- 累计已处理的音频样本数（用于 GetAudioClockMs） ----
+    std::atomic<int64_t> total_audio_samples{0};
+
     // ---- 启动时间 ----
     std::chrono::steady_clock::time_point start_time;
 
     // ========================================================================
-    // 构造函数：初始化队列
+    // 构造函数：队列先以无界占位，Init() 中按 config 重建
     // ========================================================================
 
-    Impl()
-        : audio_raw_queue(0)           // 无界
-        , mel_feature_queue(60)
-        , video_raw_queue(0)           // 无界
-        , processed_face_queue(30)
-        , inference_output_queue(30)
-        , output_frame_queue(10)
-    {}
+    Impl() = default;
+
+    // ========================================================================
+    // 按 config 重建所有队列（容量来自 PipelineConfig）
+    // ========================================================================
+
+    void InitQueuesFromConfig() {
+        // ThreadSafeQueue 支持 move-assignment，这里以 config 中指定的容量
+        // 重新构造队列并移动赋值给成员。原队列（无界占位）被丢弃。
+        // 0 容量表示无界，保留向后兼容；非 0 容量则有界，可防止推理慢或
+        // 输入过快时吃光内存。
+        audio_raw_queue = ThreadSafeQueue<AudioRawPacket>(
+            static_cast<size_t>(std::max(0, config.audio_raw_queue_size)),
+            "audio_raw_queue");
+        mel_feature_queue = ThreadSafeQueue<MelFeaturePacket>(
+            static_cast<size_t>(std::max(0, config.mel_queue_size)),
+            "mel_feature_queue");
+        video_raw_queue = ThreadSafeQueue<VideoFramePacket>(
+            static_cast<size_t>(std::max(0, config.video_raw_queue_size)),
+            "video_raw_queue");
+        processed_face_queue = ThreadSafeQueue<ProcessedFacePacket>(
+            static_cast<size_t>(std::max(0, config.face_queue_size)),
+            "processed_face_queue");
+        // 推理任务队列复用 infer_queue_size 配置
+        inference_task_queue = ThreadSafeQueue<InferenceTask>(
+            static_cast<size_t>(std::max(0, config.infer_queue_size)),
+            "inference_task_queue");
+        inference_output_queue = ThreadSafeQueue<InferenceOutputPacket>(
+            static_cast<size_t>(std::max(0, config.infer_queue_size)),
+            "inference_output_queue");
+        output_frame_queue = ThreadSafeQueue<OutputFramePacket>(
+            static_cast<size_t>(std::max(0, config.output_queue_size)),
+            "output_frame_queue");
+    }
 
     // ========================================================================
     // 初始化核心模块
     // ========================================================================
 
     bool InitCoreModules() {
-        // 设置 AVSync
         SyncConfig sync_cfg;
         sync_cfg.audio_sample_rate = config.audio_sample_rate;
         sync_cfg.sync_threshold_ms = config.sync_threshold_ms;
         sync_cfg.max_drift_ms      = config.max_drift_ms;
         av_sync.Init(sync_cfg);
 
-        // 设置 FrameScheduler
         SchedulerConfig sched_cfg;
         sched_cfg.target_fps       = config.target_fps;
         sched_cfg.smoothing_factor = 0.5;
@@ -163,595 +164,319 @@ struct Pipeline::Impl {
     }
 
     // ========================================================================
-    // 配置队列容量
-    // ========================================================================
-
-    void ConfigureQueues() {
-        // 动态调整队列容量（如果有界）
-        // 已在构造函数中设置默认值
-    }
-
-    // ========================================================================
-    // 创建工作线程
+    // 创建独立工作线程
     // ========================================================================
 
     void CreateWorkers() {
-        // ---- AudioProducer ----
-        audio_producer_thread = std::make_unique<AudioProducerThread>(*this);
 
-        // ---- AudioProcessor ----
-        audio_processor_thread = std::make_unique<AudioProcessorThread>(*this);
-
-        // ---- VideoProducer ----
-        video_producer_thread = std::make_unique<VideoProducerThread>(*this);
+        // ---- AudioProcessor (队列模式) ----
+        audio_processor = std::make_unique<AudioProcessor>("AudioProcessor");
+        AudioProcessorConfig ap_cfg;
+        ap_cfg.sample_rate = config.audio_sample_rate;
+        ap_cfg.frame_size  = config.audio_frame_size;
+        ap_cfg.hop_size    = config.audio_hop_size;
+        audio_processor->SetConfig(ap_cfg);
+        audio_processor->SetInputQueue(&audio_raw_queue);
+        audio_processor->SetOutputQueue(&mel_feature_queue);
 
         // ---- VideoProcessor ----
-        video_processor_thread = std::make_unique<VideoProcessorThread>(*this);
+        video_processor = std::make_unique<VideoProcessor>("VideoProcessor");
+        VideoProcessorConfig vp_cfg;
+        vp_cfg.face_size = config.face_size;
+        video_processor->SetConfig(vp_cfg);
+        video_processor->SetInputQueue(&video_raw_queue);
+        video_processor->SetOutputQueue(&processed_face_queue);
+
+        // ---- 音视频匹配线程（mel ↔ face PTS 匹配 + 缓存） ----
+        matcher_thread = CreateMatcherThread();
 
         // ---- InferenceWorker ----
-        inference_thread = std::make_unique<InferenceThread>(*this);
+        inference_worker = std::make_unique<InferenceWorker>("InferenceWorker");
+        InferenceWorkerConfig iw_cfg;
+        iw_cfg.pop_timeout_ms = config.pop_timeout_ms;
+        inference_worker->SetConfig(iw_cfg);
+        inference_worker->SetModelInferencer(&model_inferencer);
+        inference_worker->SetInputQueue(&inference_task_queue);
+        inference_worker->SetOutputQueue(&inference_output_queue);
 
-        // ---- OutputProcessor ----
-        output_thread = std::make_unique<OutputThread>(*this);
-
-        // ---- RenderThread ----
-        render_thread = std::make_unique<RenderThread>(*this);
+        // ---- RenderThread（融合 + 同步 + 调度 + 输出） ----
+        render_thread = std::make_unique<RenderThread>("RenderThread");
+        RenderConfig rt_cfg;
+        rt_cfg.target_fps         = config.target_fps;
+        rt_cfg.sync_threshold_ms  = config.sync_threshold_ms;
+        rt_cfg.max_drift_ms       = config.max_drift_ms;
+        rt_cfg.pop_timeout_ms     = config.pop_timeout_ms;
+        rt_cfg.drain_max_frames   = 30;
+        rt_cfg.enable_frame_pacing = config.enable_frame_pacing;
+        rt_cfg.enable_audio_sync  = true;
+        render_thread->SetConfig(rt_cfg);
+        render_thread->SetOutputProcessor(&output_processor);
+        render_thread->SetInputQueue(&inference_output_queue);
+        render_thread->SetOutputQueue(&output_frame_queue);
     }
 
     // ========================================================================
-    // 工作线程实现（内嵌类）
+    // 音视频匹配线程（face 驱动 + mel 时序窗装配）
     // ========================================================================
 
-    // ---------------------------------------------------------------
-    // AudioProducer: 从外部 PushAudio 读取数据，转发到 audio_raw_queue
-    // 实际由外部调用 PushAudio 驱动，本线程仅管理 EOS 信号
-    // ---------------------------------------------------------------
-    struct AudioProducerThread : public ThreadBase {
+    /// @brief 匹配线程：每个人脸帧装配一个 80×N mel 时序窗，生成推理任务
+    ///
+    /// Wav2Lip 要求每个输出视频帧对应一个 (mel_bins × mel_step_size) 的
+    /// mel 时序窗（默认 80×16 = 160ms 上下文），窗口起点 = face_pts / hop_ms。
+    ///
+    /// 旧实现为 mel 驱动（逐 10ms 包匹配人脸），存在两个致命问题：
+    ///   1) 帧率：每个 mel 包触发一次推理 → 任务量放大 ~4×，推理积压丢帧；
+    ///   2) 口型：单帧特征喂入时序卷积模型 → 口型驱动退化。
+    /// 此处改为视频帧驱动 + 滑动窗口装配 + 滚动上下文归一化，
+    /// 与离线参考实现（video_output_test）行为一致。
+    struct MatcherThread : public ThreadBase {
         Impl& ctx;
-        AudioProducerThread(Impl& ctx)
-            : ThreadBase("AudioProducer"), ctx(ctx) {}
-        void Run() override {
-            LogInfo("启动");
-            // 等待外部 PushAudio 数据，直到 EOS
-            while (!IsStopping()) {
-                if (ctx.audio_eos.load(std::memory_order_acquire)) {
-                    ctx.audio_raw_queue.Push(AudioRawPacket::EOS());
-                    LogInfo("音频流结束");
-                    break;
-                }
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            }
-        }
-    };
 
-    // ---------------------------------------------------------------
-    // AudioProcessor: 音频特征提取
-    // PCM → NoiseReduction → AudioFramer → VAD → PreEmphasis
-    //   → RMSNormalize → MelFeatureExtract → CMVN
-    // ---------------------------------------------------------------
-    struct AudioProcessorThread : public ThreadBase {
-        Impl& ctx;
-        AudioProcessorThread(Impl& ctx)
-            : ThreadBase("AudioProcessor"), ctx(ctx) {}
+        // ---- mel 行滚动缓冲（dB 域 log-mel，每行 1×mel_bins） ----
+        std::deque<cv::Mat> mel_rows_;          ///< 滚动缓冲（含过去上下文）
+        int64_t mel_first_seq_ = 0;             ///< 缓冲首行的全局 mel 帧序号
+        int64_t mel_next_seq_  = 0;             ///< 下一个待入缓冲的序号
+        bool    audio_eos_     = false;         ///< 音频流已结束
+
+        // ---- 配置缓存 ----
+        double hop_ms_   = 10.0;                ///< mel 帧间隔（毫秒）
+        int    window_   = 16;                  ///< mel 时序窗长度（帧）
+        int    context_  = 300;                 ///< 归一化滚动上下文长度（帧）
+        int    mel_bins_ = 80;                  ///< mel 滤波器组数
+
+        explicit MatcherThread(Impl& ctx)
+            : ThreadBase("AVMatcher"), ctx(ctx) {}
 
         void Run() override {
-            LogInfo("启动");
+            LogInfo("启动 (face-driven)");
+
+            hop_ms_  = 1000.0 * ctx.config.audio_hop_size
+                     / ctx.config.audio_sample_rate;
+            window_  = std::max(1, ctx.config.mel_window_frames);
+            context_ = std::max(window_, ctx.config.mel_context_frames);
+            // mel_bins 与 AudioProcessor 默认配置一致（80 滤波器组）
+
+            const int kPopTimeoutMs = 100;
+
             while (!IsStopping()) {
-                AudioRawPacket pkt;
-                if (!ctx.audio_raw_queue.WaitAndPop(pkt, 100)) {
-                    continue;
-                }
-
-                if (pkt.header.IsEOS()) {
-                    ctx.mel_feature_queue.Push(MelFeaturePacket::EOS());
-                    break;
-                }
-                if (pkt.header.IsFatal() || pkt.header.IsSkip()) {
-                    continue;
-                }
-
-                auto start = std::chrono::steady_clock::now();
-
-                auto result = ProcessOne(pkt);
-
-                auto elapsed = std::chrono::duration<double, std::milli>(
-                    std::chrono::steady_clock::now() - start).count();
-                ctx.total_audio_process_us.fetch_add(
-                    static_cast<int64_t>(elapsed * 1000.0),
-                    std::memory_order_relaxed);
-                ctx.audio_process_count.fetch_add(1, std::memory_order_relaxed);
-
-                if (result.header.IsOK()) {
-                    ctx.mel_feature_queue.Push(std::move(result));
-                }
-                // SKIP 或 ERROR 包直接丢弃
-            }
-            LogInfo("退出");
-        }
-
-        MelFeaturePacket ProcessOne(const AudioRawPacket& pkt) {
-            MelFeaturePacket result;
-            result.InheritHeader(pkt.header);
-
-            const auto& pcm = pkt.payload;
-            int sr = ctx.config.audio_sample_rate;
-
-            try {
-                // 1. 降噪
-                auto denoised = ctx.noise_reduction.process(pcm, sr);
-
-                // 2. RMS 归一化
-                auto normalized = ctx.rms_normalize.process(denoised);
-
-                // 3. 预加重
-                auto emphasized = ctx.pre_emphasis.process(normalized);
-
-                // 4. 分帧
-                audio::FrameConfig frame_cfg;
-                frame_cfg.frameSize = ctx.config.audio_frame_size;
-                frame_cfg.hopSize   = ctx.config.audio_hop_size;
-                auto frames = ctx.audio_framer.frame(emphasized, frame_cfg);
-
-                if (frames.empty() || frames[0].empty()) {
-                    result.header.status = StatusCode::SKIP;
-                    return result;
-                }
-
-                // 5. VAD 过滤
-                auto voiced = ctx.vad.filter(frames);
-                if (voiced.empty()) {
-                    // 无语音活动，仍然继续处理避免丢失上下文
-                }
-
-                // 6. 提取 Mel 频谱
-                audio::MelConfig mel_cfg;
-                mel_cfg.sampleRate = sr;
-                auto mel = ctx.mel_extract.extract(
-                    voiced.empty() ? frames : voiced, mel_cfg);
-
-                if (mel.empty()) {
-                    result.header.status = StatusCode::SKIP;
-                    return result;
-                }
-
-                // 7. CMVN 归一化
-                result.payload = ctx.cmvn.process(mel);
-                result.header.status = StatusCode::OK;
-
-            } catch (const std::exception& e) {
-                LogError(std::string("音频处理异常: ") + e.what());
-                result.header.status = StatusCode::ERROR;
-            }
-
-            return result;
-        }
-    };
-
-    // ---------------------------------------------------------------
-    // VideoProducer: 从外部 PushVideo 读取数据，转发到 video_raw_queue
-    // ---------------------------------------------------------------
-    struct VideoProducerThread : public ThreadBase {
-        Impl& ctx;
-        VideoProducerThread(Impl& ctx)
-            : ThreadBase("VideoProducer"), ctx(ctx) {}
-        void Run() override {
-            LogInfo("启动");
-            while (!IsStopping()) {
-                if (ctx.video_eos.load(std::memory_order_acquire)) {
-                    ctx.video_raw_queue.Push(VideoFramePacket::EOS());
-                    LogInfo("视频流结束");
-                    break;
-                }
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            }
-        }
-    };
-
-    // ---------------------------------------------------------------
-    // VideoProcessor: 人脸检测 + 对齐 + 遮罩
-    // cv::Mat → FaceDetect → FaceAlign → FaceMask
-    // ---------------------------------------------------------------
-    struct VideoProcessorThread : public ThreadBase {
-        Impl& ctx;
-        VideoProcessorThread(Impl& ctx)
-            : ThreadBase("VideoProcessor"), ctx(ctx) {}
-
-        void Run() override {
-            LogInfo("启动");
-            while (!IsStopping()) {
-                VideoFramePacket pkt;
-                if (!ctx.video_raw_queue.WaitAndPop(pkt, 100)) {
-                    continue;
-                }
-
-                if (pkt.header.IsEOS()) {
-                    ctx.processed_face_queue.Push(ProcessedFacePacket::EOS());
-                    break;
-                }
-                if (pkt.header.IsFatal() || pkt.header.IsSkip()) {
-                    continue;
-                }
-
-                auto start = std::chrono::steady_clock::now();
-                auto result = ProcessOne(pkt);
-                auto elapsed = std::chrono::duration<double, std::milli>(
-                    std::chrono::steady_clock::now() - start).count();
-                ctx.total_video_process_us.fetch_add(
-                    static_cast<int64_t>(elapsed * 1000.0),
-                    std::memory_order_relaxed);
-                ctx.video_process_count.fetch_add(1, std::memory_order_relaxed);
-
-                if (result.header.IsOK()) {
-                    ctx.processed_face_queue.Push(std::move(result));
-                }
-            }
-            LogInfo("退出");
-        }
-
-        ProcessedFacePacket ProcessOne(const VideoFramePacket& pkt) {
-            ProcessedFacePacket result;
-            result.InheritHeader(pkt.header);
-
-            try {
-                const cv::Mat& frame = pkt.payload;
-
-                // 1. 人脸检测
-                auto faces = ctx.face_detector.detect(frame);
-                if (faces.empty()) {
-                    LogInfo("未检测到人脸");
-                    result.header.status = StatusCode::SKIP;
-                    return result;
-                }
-
-                // 取最大的人脸
-                auto max_face = std::max_element(faces.begin(), faces.end(),
-                    [](const cv::Rect& a, const cv::Rect& b) {
-                        return a.area() < b.area();
-                    });
-
-                // 2. 获取关键点
-                auto landmarks = ctx.face_detector.getLandmarks(frame, *max_face);
-                if (landmarks.empty()) {
-                    result.header.status = StatusCode::SKIP;
-                    return result;
-                }
-
-                // 3. 人脸对齐
-                std::vector<cv::Point2f> landmarks_f;
-                for (const auto& pt : landmarks) {
-                    landmarks_f.emplace_back(
-                        static_cast<float>(pt.x),
-                        static_cast<float>(pt.y));
-                }
-
-                auto align_result = ctx.face_aligner.alignByRect(
-                    frame, landmarks_f,
-                    ctx.config.face_size, *max_face);
-
-                if (!align_result.valid) {
-                    result.header.status = StatusCode::SKIP;
-                    return result;
-                }
-
-                // 4. 生成口唇遮罩
-                auto mouth_mask = ctx.face_mask_gen.generateMouthMask(
-                    frame.size(), landmarks);
-
-                // 5. 96x96 空间的精细遮罩
-                auto precise_mask = ctx.face_mask_gen.generatePreciseMouthAlphaMask96(
-                    align_result.landmarks);
-
-                // 填充结果
-                result.payload.aligned_face  = align_result.aligned_face;
-                result.payload.M_inv         = align_result.M_inv;
-                result.payload.face_mask     = precise_mask.empty() ? mouth_mask : precise_mask;
-                result.payload.original_face = frame.clone();
-                result.payload.face_rect     = align_result.face_rect;
-                result.payload.landmarks_96  = align_result.landmarks;
-                result.header.status         = StatusCode::OK;
-
-            } catch (const std::exception& e) {
-                LogError(std::string("视频处理异常: ") + e.what());
-                result.header.status = StatusCode::ERROR;
-            }
-
-            return result;
-        }
-    };
-
-    // ---------------------------------------------------------------
-    // InferenceThread: 模型推理
-    // 等待 Mel 特征 + 处理后人脸 → 推理 → 输出
-    // ---------------------------------------------------------------
-    struct InferenceThread : public ThreadBase {
-        Impl& ctx;
-        InferenceThread(Impl& ctx)
-            : ThreadBase("InferenceWorker"), ctx(ctx) {}
-
-        void Run() override {
-            LogInfo("启动");
-            while (!IsStopping()) {
-                // 1. 取 Mel 特征
-                MelFeaturePacket mel_pkt;
-                if (!ctx.mel_feature_queue.WaitAndPop(mel_pkt, 100)) {
-                    continue;
-                }
-                if (mel_pkt.header.IsEOS()) {
-                    ctx.inference_output_queue.Push(
-                        InferenceOutputPacket::EOS());
-                    break;
-                }
-                if (mel_pkt.header.IsFatal()) {
-                    ctx.inference_output_queue.Push(
-                        InferenceOutputPacket::Fatal());
-                    break;
-                }
-                if (mel_pkt.header.IsSkip()) {
-                    continue;
-                }
-
-                // 2. 取处理后的人脸（时间戳匹配）
+                // ---- 1. 取人脸帧（视频帧 = 输出节拍） ----
                 ProcessedFacePacket face_pkt;
-                if (!MatchFacePacket(mel_pkt, face_pkt)) {
-                    // 匹配失败，丢弃当前 mel
+                if (!ctx.processed_face_queue.WaitAndPop(
+                        face_pkt, kPopTimeoutMs)) {
+                    if (ctx.video_eos.load(std::memory_order_acquire)
+                        && ctx.processed_face_queue.Empty()) {
+                        ctx.inference_task_queue.Push(InferenceTask::EOS());
+                        LogInfo("视频帧匹配完毕，发送 EOS");
+                        break;
+                    }
                     continue;
-                }
-                if (face_pkt.header.IsSkip()) {
-                    continue;
-                }
-
-                // 3. 准备推理输入
-                if (!ctx.model_inferencer.IsInitialized()) {
-                    LogError("模型未初始化");
-                    continue;
-                }
-
-                auto start = std::chrono::steady_clock::now();
-
-                // 将 cv::Mat 转为 ncnn::Mat
-                // 注意: Wav2Lip 的输入格式需要匹配模型要求
-                cv::Mat face_input;
-                if (face_pkt.payload.aligned_face.channels() == 3) {
-                    // 单帧: 复制一份作为第 4-6 通道（对口型模型要求 6 通道输入）
-                    cv::Mat channels[6];
-                    cv::split(face_pkt.payload.aligned_face, channels);
-                    // 复制前 3 通道作为后 3 通道
-                    channels[3] = channels[0].clone();
-                    channels[4] = channels[1].clone();
-                    channels[5] = channels[2].clone();
-                    cv::merge(channels, 6, face_input);
-                } else {
-                    face_input = face_pkt.payload.aligned_face.clone();
-                }
-
-                // 音频 mel 特征 (cv::Mat) → ncnn::Mat
-                // mel.shape = (mel_bins, T, 1)
-                cv::Mat mel_mat = mel_pkt.payload;
-                if (mel_mat.empty()) continue;
-
-                // 推理
-                ncnn::Mat audio_feat_ncnn(mel_mat.cols, mel_mat.rows, 1,
-                    (void*)mel_mat.data);
-                ncnn::Mat face_input_ncnn(face_input.cols, face_input.rows,
-                    face_input.channels(), (void*)face_input.data);
-
-                ncnn::Mat model_output = ctx.model_inferencer.Infer(
-                    audio_feat_ncnn, face_input_ncnn);
-
-                auto elapsed = std::chrono::duration<double, std::milli>(
-                    std::chrono::steady_clock::now() - start).count();
-
-                ctx.total_inference_us.fetch_add(
-                    static_cast<int64_t>(elapsed * 1000.0),
-                    std::memory_order_relaxed);
-                ctx.inference_count_val.fetch_add(1, std::memory_order_relaxed);
-                ctx.inference_count.fetch_add(1, std::memory_order_relaxed);
-
-                if (model_output.empty()) {
-                    continue;
-                }
-
-                // 4. 打包推理结果
-                InferenceOutputPacket out_pkt;
-                out_pkt.InheritHeader(mel_pkt.header);
-                out_pkt.payload = model_output;
-                // 附加人脸处理数据供下游使用
-                // （通过静态变量传递 - 生产环境应使用更健壮的方式）
-                ctx.inference_output_queue.Push(std::move(out_pkt));
-            }
-            LogInfo("退出");
-        }
-
-        /// @brief 时间戳匹配：寻找与 mel_pkt 时间戳匹配的人脸包
-        bool MatchFacePacket(const MelFeaturePacket& mel_pkt,
-                            ProcessedFacePacket& face_pkt) {
-            int64_t target_pts = mel_pkt.header.pts_ms;
-            double threshold   = ctx.config.av_match_threshold_ms;
-            int max_attempts   = 10;
-
-            for (int i = 0; i < max_attempts; ++i) {
-                if (!ctx.processed_face_queue.WaitAndPop(face_pkt, 100)) {
-                    return false;
                 }
 
                 if (face_pkt.header.IsEOS()) {
-                    return false;
+                    LogInfo("人脸流结束");
+                    ctx.inference_task_queue.Push(InferenceTask::EOS());
+                    break;
                 }
                 if (face_pkt.header.IsFatal()) {
-                    return false;
+                    ctx.inference_task_queue.Push(InferenceTask::Fatal());
+                    break;
                 }
                 if (face_pkt.header.IsSkip()) {
-                    continue;  // 跳过处理失败的帧
-                }
-
-                double drift = std::abs(
-                    static_cast<double>(face_pkt.header.pts_ms - target_pts));
-
-                if (drift <= threshold) {
-                    return true;  // 匹配成功
-                }
-
-                // 视频超前于音频 → 丢弃人脸帧，取下一帧
-                // 视频滞后于音频 → 丢弃音频帧（由调用方处理）
-                if (face_pkt.header.pts_ms > target_pts) {
-                    // 视频超前，丢弃当前 face，继续取
-                    ctx.frames_skipped.fetch_add(1, std::memory_order_relaxed);
                     continue;
+                }
+
+                // 累加视频处理耗时（face 包的 cost_ms 由 VideoProcessor 写入）
+                if (face_pkt.header.cost_ms > 0.0) {
+                    ctx.total_video_process_us.fetch_add(
+                        static_cast<int64_t>(face_pkt.header.cost_ms * 1000.0),
+                        std::memory_order_relaxed);
+                    ctx.video_process_count.fetch_add(
+                        1, std::memory_order_relaxed);
+                }
+
+                // ---- 2. 该视频帧对应的 mel 窗口起始序号 ----
+                int64_t mel_start = static_cast<int64_t>(std::llround(
+                    static_cast<double>(face_pkt.header.pts_ms) / hop_ms_));
+
+                // ---- 3. 填充缓冲直到覆盖 [mel_start, mel_start+window) ----
+                FillMelBuffer(mel_start);
+
+                // 音频耗尽且缓冲已空 → 无音频可配 → 结束
+                if (mel_rows_.empty()) {
+                    if (audio_eos_) {
+                        LogInfo("音频耗尽，提前结束匹配");
+                        ctx.inference_task_queue.Push(InferenceTask::EOS());
+                        break;
+                    }
+                    continue;
+                }
+
+                // ---- 4. 装配 window×80 窗口（边界 clamp，与参考实现一致） ----
+                cv::Mat win(window_, mel_bins_, CV_32F);
+                for (int f = 0; f < window_; ++f) {
+                    int64_t idx = mel_start + f;
+                    const cv::Mat* row = nullptr;
+                    if (idx <= mel_first_seq_) {
+                        row = &mel_rows_.front();   // 人脸滞后：钳到最早可用帧
+                    } else if (idx - mel_first_seq_
+                               < static_cast<int64_t>(mel_rows_.size())) {
+                        row = &mel_rows_[idx - mel_first_seq_];
+                    } else {
+                        row = &mel_rows_.back();    // 音频末尾：钳到最后一帧
+                    }
+                    row->copyTo(win.row(f));
+                }
+
+                // ---- 5. 滚动上下文归一化（min-max + CMVN） ----
+                // 在丢弃旧行之前执行，使上下文包含窗口之前的历史
+                NormalizeWindow(win);
+
+                // ---- 6. 丢弃窗口之前的旧行 + 裁剪上下文容量 ----
+                while (mel_first_seq_ < mel_start && !mel_rows_.empty()) {
+                    mel_rows_.pop_front();
+                    ++mel_first_seq_;
+                }
+                while (static_cast<int>(mel_rows_.size()) > context_) {
+                    mel_rows_.pop_front();
+                    ++mel_first_seq_;
+                }
+
+                // ---- 7. 生成推理任务（PTS 以视频帧为准 —— 输出时间轴） ----
+                MelFeaturePacket mel_pkt;
+                mel_pkt.header.pts_ms = face_pkt.header.pts_ms;
+                mel_pkt.header.seq_id = face_pkt.header.seq_id;
+                mel_pkt.header.status = StatusCode::OK;
+                mel_pkt.payload = std::move(win);
+
+                InferenceTask task;
+                task.mel  = std::move(mel_pkt);
+                task.face = std::move(face_pkt);
+                ctx.inference_task_queue.Push(std::move(task));
+            }
+
+            LogInfo("退出");
+        }
+
+        /// @brief 从 mel 队列拉取特征行，直到缓冲覆盖目标窗口或音频结束
+        void FillMelBuffer(int64_t mel_start) {
+            const int kPopTimeoutMs = 100;
+            while (!IsStopping() && !audio_eos_
+                   && mel_next_seq_ < mel_start + window_) {
+                MelFeaturePacket mel_pkt;
+                if (!ctx.mel_feature_queue.WaitAndPop(
+                        mel_pkt, kPopTimeoutMs)) {
+                    // 上游已标记 EOS 且队列空 → 音频结束
+                    if (ctx.audio_eos.load(std::memory_order_acquire)
+                        && ctx.mel_feature_queue.Empty()) {
+                        audio_eos_ = true;
+                        break;
+                    }
+                    continue;
+                }
+                if (mel_pkt.header.IsEOS() || mel_pkt.header.IsFatal()) {
+                    audio_eos_ = true;
+                    break;
+                }
+                if (mel_pkt.header.IsSkip() || mel_pkt.payload.empty()) {
+                    continue;
+                }
+
+                // 累加音频处理耗时
+                if (mel_pkt.header.cost_ms > 0.0) {
+                    ctx.total_audio_process_us.fetch_add(
+                        static_cast<int64_t>(mel_pkt.header.cost_ms * 1000.0),
+                        std::memory_order_relaxed);
+                    ctx.audio_process_count.fetch_add(
+                        1, std::memory_order_relaxed);
+                }
+
+                AppendMelPacket(mel_pkt);
+            }
+        }
+
+        /// @brief 将 mel 包的各行按全局序号追加到滚动缓冲（缺口自动填补）
+        void AppendMelPacket(const MelFeaturePacket& mel_pkt) {
+            const cv::Mat& m = mel_pkt.payload;
+            if (m.empty()) return;
+
+            // 行优先约定：rows=时间帧, cols=mel_bins
+            cv::Mat rows_mat;
+            if (m.cols == mel_bins_) {
+                rows_mat = m;
+            } else if (m.rows == mel_bins_) {
+                rows_mat = m.t();   // 防御：转置输入自动纠正
+            } else {
+                LogInfo("mel 包尺寸异常，丢弃");
+                return;
+            }
+
+            // 以包 seq_id 重同步（AudioProcessor 逐 hop 连续发射）
+            int64_t pkt_seq = mel_pkt.header.seq_id;
+            if (pkt_seq < mel_next_seq_) {
+                pkt_seq = mel_next_seq_;    // 过期包：按当前位置追加
+            }
+            // 缺口填补（SKIP/丢帧）：重复最后一行保持时间轴连续
+            while (mel_next_seq_ < pkt_seq) {
+                if (mel_rows_.empty()) {
+                    mel_rows_.emplace_back(
+                        cv::Mat::zeros(1, mel_bins_, CV_32F));
                 } else {
-                    // 视频滞后，把 face 放回队列（让调用方丢弃 mel）
-                    // 但简化实现：直接返回 SKIP
-                    ctx.frames_skipped.fetch_add(1, std::memory_order_relaxed);
-                    face_pkt.header.status = StatusCode::SKIP;
-                    return true;
+                    mel_rows_.push_back(mel_rows_.back());
                 }
+                ++mel_next_seq_;
+            }
+            for (int r = 0; r < rows_mat.rows; ++r) {
+                mel_rows_.push_back(rows_mat.row(r).clone());
+                ++mel_next_seq_;
+            }
+        }
+
+        /// @brief 滚动上下文归一化：min-max → CMVN（复刻离线参考实现）
+        ///
+        /// 统计范围为当前滚动缓冲（≈最近 3s 上下文），与参考实现的
+        /// 全音频统计近似等效，且随流式输入逐步收敛。
+        void NormalizeWindow(cv::Mat& win) const {
+            if (mel_rows_.empty() || win.empty()) return;
+
+            // 1. 拼接上下文 (N × mel_bins)
+            cv::Mat ctxmat(static_cast<int>(mel_rows_.size()),
+                           mel_bins_, CV_32F);
+            for (size_t i = 0; i < mel_rows_.size(); ++i) {
+                mel_rows_[i].copyTo(ctxmat.row(static_cast<int>(i)));
             }
 
-            return false;
+            // 2. min-max 归一化（上下文统计 → 应用到窗口）
+            double mn = 0.0, mx = 0.0;
+            cv::minMaxLoc(ctxmat, &mn, &mx);
+            if (mx > mn) {
+                win = (win - mn) / (mx - mn);
+            }
+
+            // 3. CMVN（上下文 per-bin mean/std → 应用到窗口）
+            cv::Mat mean_row;
+            cv::reduce(ctxmat, mean_row, 0, cv::REDUCE_AVG);
+            const float kEps = 1e-10f;
+            for (int j = 0; j < mel_bins_; ++j) {
+                float mean = mean_row.at<float>(0, j);
+                double sum_sq = 0.0;
+                for (int i = 0; i < ctxmat.rows; ++i) {
+                    double d = ctxmat.at<float>(i, j) - mean;
+                    sum_sq += d * d;
+                }
+                float stddev = static_cast<float>(
+                    std::sqrt(sum_sq / ctxmat.rows));
+                float inv = (stddev > kEps) ? (1.0f / stddev) : 1.0f;
+                for (int f = 0; f < win.rows; ++f) {
+                    win.at<float>(f, j) = (win.at<float>(f, j) - mean) * inv;
+                }
+            }
         }
     };
 
-    // ---------------------------------------------------------------
-    // OutputThread: 推理输出后处理
-    // ncnn::Mat → OutputToMat → InverseTransform → FaceFusion → PostProcess
-    // ---------------------------------------------------------------
-    struct OutputThread : public ThreadBase {
-        Impl& ctx;
-        OutputThread(Impl& ctx)
-            : ThreadBase("OutputProcessor"), ctx(ctx) {}
-
-        void Run() override {
-            LogInfo("启动");
-            while (!IsStopping()) {
-                InferenceOutputPacket pkt;
-                if (!ctx.inference_output_queue.WaitAndPop(pkt, 100)) {
-                    continue;
-                }
-
-                if (pkt.header.IsEOS()) {
-                    ctx.output_frame_queue.Push(OutputFramePacket::EOS());
-                    break;
-                }
-                if (pkt.header.IsFatal()) {
-                    ctx.output_frame_queue.Push(OutputFramePacket::Fatal());
-                    break;
-                }
-
-                // 注意: 此处需要关联原始人脸数据
-                // 简化实现中，我们生成一个空输出帧以便 RenderThread 驱动
-                // 完整实现需要 InferenceOutputPacket 携带 ProcessedFaceData
-
-                auto start = std::chrono::steady_clock::now();
-
-                // 模型输出 → cv::Mat
-                cv::Mat face_mat = ctx.output_processor.OutputToMat(pkt.payload);
-                if (face_mat.empty()) {
-                    continue;
-                }
-
-                // 简化的后处理（实际需要 M_inv 和 face_mask，此处略）
-                OutputFramePacket out_pkt;
-                out_pkt.InheritHeader(pkt.header);
-                out_pkt.payload = face_mat;
-                out_pkt.header.status = StatusCode::OK;
-
-                auto elapsed = std::chrono::duration<double, std::milli>(
-                    std::chrono::steady_clock::now() - start).count();
-                ctx.total_output_us.fetch_add(
-                    static_cast<int64_t>(elapsed * 1000.0),
-                    std::memory_order_relaxed);
-                ctx.output_count.fetch_add(1, std::memory_order_relaxed);
-
-                ctx.output_frame_queue.Push(std::move(out_pkt));
-            }
-            LogInfo("退出");
-        }
-    };
-
-    // ---------------------------------------------------------------
-    // RenderThread: 帧调度 + 同步判定 + 渲染输出
-    // ---------------------------------------------------------------
-    struct RenderThread : public ThreadBase {
-        Impl& ctx;
-        RenderThread(Impl& ctx)
-            : ThreadBase("RenderThread"), ctx(ctx) {}
-
-        void Run() override {
-            LogInfo("启动");
-            ctx.start_time = std::chrono::steady_clock::now();
-
-            int64_t frame_id = 0;
-
-            while (!IsStopping()) {
-                if (ctx.paused.load(std::memory_order_acquire)) {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                    continue;
-                }
-
-                OutputFramePacket pkt;
-                if (!ctx.output_frame_queue.WaitAndPop(pkt, 100)) {
-                    continue;
-                }
-
-                if (pkt.header.IsEOS()) {
-                    break;
-                }
-                if (pkt.header.IsFatal()) {
-                    LogError("下游报告致命错误，停止渲染");
-                    break;
-                }
-                if (pkt.header.IsSkip()) {
-                    ctx.frames_skipped.fetch_add(1, std::memory_order_relaxed);
-                    continue;
-                }
-
-                // 同步判定 + 帧调度
-                ScheduleResult sched = ctx.frame_scheduler.ScheduleFrame(
-                    frame_id, static_cast<double>(pkt.header.pts_ms));
-
-                switch (sched.action) {
-                    case FrameAction::DISPLAY:
-                        ctx.total_frames_out.fetch_add(1,
-                            std::memory_order_relaxed);
-                        ctx.frame_scheduler.OnFrameDisplayed(
-                            static_cast<double>(pkt.header.pts_ms));
-                        frame_id++;
-                        break;
-
-                    case FrameAction::DROP:
-                        ctx.frames_dropped.fetch_add(1,
-                            std::memory_order_relaxed);
-                        break;
-
-                    case FrameAction::DUPLICATE:
-                        // 重复上一帧（输出队列中没有上一帧缓存时，跳过）
-                        ctx.total_frames_out.fetch_add(1,
-                            std::memory_order_relaxed);
-                        ctx.frame_scheduler.OnFrameDisplayed(
-                            static_cast<double>(pkt.header.pts_ms));
-                        break;
-
-                    case FrameAction::WAIT:
-                        std::this_thread::sleep_for(
-                            std::chrono::milliseconds(
-                                static_cast<int>(sched.wait_time_ms)));
-                        // 把包放回队列重试
-                        // ctx.output_frame_queue.Push(std::move(pkt));  // 简化跳过
-                        break;
-                }
-
-                // 更新音频时钟（简化：用系统时钟代替 PortAudio 位置）
-                // 正式使用时，AudioPlayer::GetConsumedFrames() 提供精确位置
-                auto now = std::chrono::steady_clock::now();
-                double elapsed_ms = std::chrono::duration<double, std::milli>(
-                    now - ctx.start_time).count();
-                int64_t estimated_samples = static_cast<int64_t>(
-                    elapsed_ms / 1000.0 * ctx.config.audio_sample_rate);
-                ctx.av_sync.UpdateAudioClock(estimated_samples);
-            }
-
-            LogInfo("退出");
-        }
-    };
+    /// @brief 创建匹配线程实例
+    std::unique_ptr<ThreadBase> CreateMatcherThread() {
+        return std::make_unique<MatcherThread>(*this);
+    }
 };
 
 // ============================================================================
@@ -770,6 +495,11 @@ bool Pipeline::Init(const PipelineConfig& config) {
         std::cerr << "[Pipeline] Init: 重复初始化" << std::endl;
         return false;
     }
+    if (impl_->terminated.load(std::memory_order_acquire)) {
+        std::cerr << "[Pipeline] Init: Pipeline 已被 Stop 终止，不可重复使用"
+                  << std::endl;
+        return false;
+    }
 
     // 校验参数
     if (config.audio_sample_rate <= 0) {
@@ -782,7 +512,15 @@ bool Pipeline::Init(const PipelineConfig& config) {
     }
 
     impl_->config = config;
-    impl_->ConfigureQueues();
+
+    // 限制 OpenCV 并行线程数：本 SDK 的 OpenCV 操作均为小图（96×96~ROI 几百像素），
+    // 线程过多同步开销大于收益，且会与 ncnn 推理线程争抢 CPU 核
+    if (config.opencv_num_threads > 0) {
+        cv::setNumThreads(config.opencv_num_threads);
+    }
+
+    // 按 config 重建队列容量（替代旧的硬编码 0/60/30/10）
+    impl_->InitQueuesFromConfig();
 
     if (!impl_->InitCoreModules()) {
         return false;
@@ -802,21 +540,53 @@ bool Pipeline::Start() {
         std::cerr << "[Pipeline] Start: 未初始化" << std::endl;
         return false;
     }
+    if (impl_->terminated.load(std::memory_order_acquire)) {
+        // Pipeline 是一次性对象：Stop() 后队列被永久 Stop、worker 状态机
+        // 无法从 STOPPED 回到 INIT，再次 Start 只会得到假运行状态。
+        std::cerr << "[Pipeline] Start: Pipeline 已被 Stop 终止，拒绝重启"
+                  << std::endl;
+        return false;
+    }
     if (impl_->running.load()) {
         return true;
     }
 
-    // 按从下游到上游的顺序启动
-    impl_->render_thread->Start();
-    impl_->output_thread->Start();
-    impl_->inference_thread->Start();
-    impl_->video_processor_thread->Start();
-    impl_->audio_processor_thread->Start();
-    impl_->video_producer_thread->Start();
-    impl_->audio_producer_thread->Start();
+    impl_->start_time = std::chrono::steady_clock::now();
+
+    // 按从下游到上游的顺序启动（消费者先启动，避免数据堆积无消费端）
+    // 检查每个 worker 的 Start() 返回值，任一失败则回滚已启动的线程
+    bool ok = true;
+    if (!impl_->render_thread->Start())    ok = false;
+    if (ok && !impl_->inference_worker->Start()) {
+        impl_->render_thread->Shutdown();
+        ok = false;
+    }
+    if (ok && !impl_->matcher_thread->Start()) {
+        impl_->inference_worker->Shutdown();
+        impl_->render_thread->Shutdown();
+        ok = false;
+    }
+    if (ok && !impl_->video_processor->Start()) {
+        impl_->matcher_thread->Shutdown();
+        impl_->inference_worker->Shutdown();
+        impl_->render_thread->Shutdown();
+        ok = false;
+    }
+    if (ok && !impl_->audio_processor->Start()) {
+        impl_->video_processor->Shutdown();
+        impl_->matcher_thread->Shutdown();
+        impl_->inference_worker->Shutdown();
+        impl_->render_thread->Shutdown();
+        ok = false;
+    }
+
+    if (!ok) {
+        std::cerr << "[Pipeline] Start: 部分线程启动失败，已回滚" << std::endl;
+        return false;
+    }
 
     impl_->running.store(true, std::memory_order_release);
-    std::cout << "[Pipeline] 已启动" << std::endl;
+    std::cout << "[Pipeline] 已启动 (5 线程)" << std::endl;
     return true;
 }
 
@@ -824,37 +594,45 @@ void Pipeline::Stop() {
     if (!impl_->running.load() && !impl_->initialized.load()) {
         return;
     }
+    if (impl_->terminated.load(std::memory_order_acquire)) {
+        // 已经被 Stop 过，幂等返回
+        return;
+    }
 
     std::cout << "[Pipeline] 正在停止..." << std::endl;
 
-    // 停止所有队列（唤醒等待线程）
+    // 先标记 EOS，让各线程自然退出
+    impl_->audio_processor->MarkEOS();
+    impl_->video_processor->MarkInputEOS();
+
+    // 停止所有队列（唤醒等待线程）。Stop() 后队列不可恢复，因此 Pipeline
+    // 被视为一次性对象，再次 Start 会被拒绝。
     impl_->audio_raw_queue.Stop();
     impl_->mel_feature_queue.Stop();
     impl_->video_raw_queue.Stop();
     impl_->processed_face_queue.Stop();
+    impl_->inference_task_queue.Stop();
     impl_->inference_output_queue.Stop();
     impl_->output_frame_queue.Stop();
 
     // 按从上游到下游的顺序停止线程
-    impl_->audio_producer_thread->Stop();
-    impl_->video_producer_thread->Stop();
-    impl_->audio_processor_thread->Stop();
-    impl_->video_processor_thread->Stop();
-    impl_->inference_thread->Stop();
-    impl_->output_thread->Stop();
+    impl_->audio_processor->Stop();
+    impl_->video_processor->Stop();
+    impl_->matcher_thread->Stop();
+    impl_->inference_worker->Stop();
     impl_->render_thread->Stop();
 
     // 等待所有线程退出
     int timeout = impl_->config.shutdown_timeout_ms;
-    impl_->audio_producer_thread->Wait(timeout);
-    impl_->video_producer_thread->Wait(timeout);
-    impl_->audio_processor_thread->Wait(timeout);
-    impl_->video_processor_thread->Wait(timeout);
-    impl_->inference_thread->Wait(timeout);
-    impl_->output_thread->Wait(timeout);
+    impl_->audio_processor->Wait(timeout);
+    impl_->video_processor->Wait(timeout);
+    impl_->matcher_thread->Wait(timeout);
+    impl_->inference_worker->Wait(timeout);
     impl_->render_thread->Wait(timeout);
 
     impl_->running.store(false, std::memory_order_release);
+    // 标记终止：后续 Start() 会被拒绝
+    impl_->terminated.store(true, std::memory_order_release);
     std::cout << "[Pipeline] 已停止" << std::endl;
 }
 
@@ -871,6 +649,8 @@ bool Pipeline::PushAudio(const std::vector<float>& pcm_data, int64_t pts_ms) {
         return false;
     }
     impl_->audio_packets_in.fetch_add(1, std::memory_order_relaxed);
+    impl_->total_audio_samples.fetch_add(pcm_data.size(),
+        std::memory_order_relaxed);
     auto pkt = AudioRawPacket::Make(pcm_data, pts_ms,
                                     impl_->audio_packets_in.load());
     return impl_->audio_raw_queue.Push(std::move(pkt));
@@ -889,10 +669,12 @@ bool Pipeline::PushVideo(const cv::Mat& frame, int64_t pts_ms) {
 
 void Pipeline::MarkAudioEOS() {
     impl_->audio_eos.store(true, std::memory_order_release);
+    impl_->audio_processor->MarkEOS();
 }
 
 void Pipeline::MarkVideoEOS() {
     impl_->video_eos.store(true, std::memory_order_release);
+    impl_->video_processor->MarkInputEOS();
 }
 
 // ========================================================================
@@ -927,52 +709,95 @@ bool Pipeline::IsPaused() const {
 
 PipelineMetrics Pipeline::GetMetrics() const {
     PipelineMetrics m;
+    // 输入计数：本对象维护，准确
     m.total_frames_in   = impl_->total_frames_in.load();
-    m.total_frames_out  = impl_->total_frames_out.load();
-    m.frames_dropped    = impl_->frames_dropped.load();
-    m.frames_skipped    = impl_->frames_skipped.load();
     m.audio_packets_in  = impl_->audio_packets_in.load();
     m.video_packets_in  = impl_->video_packets_in.load();
-    m.inference_count   = impl_->inference_count.load();
 
-    auto apc = impl_->audio_process_count.load();
+    // 音频/视频处理耗时：MatcherThread 累加 mel/face 包的 cost_ms
+    auto apc = impl_->audio_process_count.load(std::memory_order_relaxed);
     if (apc > 0)
         m.avg_audio_process_ms = static_cast<double>(
-            impl_->total_audio_process_us.load()) / apc / 1000.0;
-    auto vpc = impl_->video_process_count.load();
+            impl_->total_audio_process_us.load(std::memory_order_relaxed))
+            / apc / 1000.0;
+    auto vpc = impl_->video_process_count.load(std::memory_order_relaxed);
     if (vpc > 0)
         m.avg_video_process_ms = static_cast<double>(
-            impl_->total_video_process_us.load()) / vpc / 1000.0;
-    auto ic = impl_->inference_count_val.load();
-    if (ic > 0)
-        m.avg_inference_ms = static_cast<double>(
-            impl_->total_inference_us.load()) / ic / 1000.0;
-    auto oc = impl_->output_count.load();
-    if (oc > 0)
-        m.avg_output_ms = static_cast<double>(
-            impl_->total_output_us.load()) / oc / 1000.0;
+            impl_->total_video_process_us.load(std::memory_order_relaxed))
+            / vpc / 1000.0;
 
-    auto stats = impl_->frame_scheduler.GetStats();
-    m.actual_fps = stats.actual_fps;
+    // 推理计数：聚合 InferenceWorker 的指标
+    if (impl_->inference_worker) {
+        auto im = impl_->inference_worker->GetMetrics();
+        m.inference_count   = im.total_inferences;
+        m.frames_skipped    = im.total_failures + im.skipped_due_to_backlog;
+        m.avg_inference_ms  = im.avg_latency_ms;
+    }
+
+    // 输出/丢弃/渲染耗时：聚合 RenderThread 的指标
+    if (impl_->render_thread) {
+        auto rm = impl_->render_thread->GetMetrics();
+        m.total_frames_out  = rm.frames_displayed;
+        m.frames_dropped    = rm.frames_dropped;
+        m.avg_output_ms     = rm.avg_render_ms;
+        // 实际帧率（FrameScheduler EMA 平滑值）
+        auto stats = impl_->render_thread->GetFrameStats();
+        m.actual_fps = stats.actual_fps;
+    }
 
     return m;
 }
 
 FrameStats Pipeline::GetFrameStats() const {
-    return impl_->frame_scheduler.GetStats();
+    if (impl_->render_thread) {
+        return impl_->render_thread->GetFrameStats();
+    }
+    return FrameStats();
 }
 
 SyncStatus Pipeline::GetSyncStatus() const {
-    return impl_->av_sync.GetSyncStatus(0.0).status;
+    // 从 RenderThread 的 FrameScheduler 推断同步状态
+    double drift = GetDriftMs();
+    if (std::abs(drift) >= impl_->config.max_drift_ms) {
+        return SyncStatus::SEVERE_OFFSET;
+    }
+    if (drift > impl_->config.sync_threshold_ms) {
+        return SyncStatus::VIDEO_AHEAD;
+    }
+    if (drift < -impl_->config.sync_threshold_ms) {
+        return SyncStatus::VIDEO_BEHIND;
+    }
+    return SyncStatus::SYNCED;
 }
 
 double Pipeline::GetDriftMs() const {
-    // 简化：从 AVSync 获取最近一次同步结果
+    if (impl_->render_thread) {
+        return impl_->render_thread->GetDriftMs();
+    }
     return 0.0;
 }
 
 double Pipeline::GetAudioClockMs() const {
-    return impl_->av_sync.GetAudioClockMs();
+    // 基于累计输入音频样本数估算音频时钟
+    if (impl_->config.audio_sample_rate <= 0) return 0.0;
+    int64_t samples = impl_->total_audio_samples.load(std::memory_order_relaxed);
+    return static_cast<double>(samples) / impl_->config.audio_sample_rate * 1000.0;
+}
+
+void Pipeline::SetLandmarkModelPath(const std::string& path) {
+    if (impl_->video_processor) {
+        impl_->video_processor->SetLandmarkModelPath(path);
+    }
+}
+
+bool Pipeline::InitModelInferencer(const std::string& model_dir) {
+    return impl_->model_inferencer.Init(model_dir);
+}
+
+void Pipeline::SetInferenceThreads(int n) {
+    if (n > 0) {
+        impl_->model_inferencer.SetThreadCount(n);
+    }
 }
 
 }  // namespace core

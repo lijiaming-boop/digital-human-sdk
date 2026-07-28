@@ -12,7 +12,7 @@
     → RMSNormalize → MelFeatureExtract → CMVN
 
 视频流水线:
-  ImageLoader → FaceDetector → FaceAlignigner → FaceMaskGenerator
+  ImageLoader → FaceDetector → FaceAligner → FaceMaskGenerator
 
 推理与输出:
   ModelLoader → ModelInferencer (Wav2Lip) → OutputProcessor

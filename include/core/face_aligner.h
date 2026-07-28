@@ -8,14 +8,14 @@ namespace core {
 
 struct FaceAlignerResult;
 
-class FaceAlignigner {
+class FaceAligner {
 public:
-    FaceAlignigner();
-    ~FaceAlignigner();
-    FaceAlignigner& operator=(const FaceAlignigner& other) = delete;
-    FaceAlignigner(const FaceAlignigner& other) = delete;
-    FaceAlignigner& operator=(FaceAlignigner&& other) noexcept;
-    FaceAlignigner(FaceAlignigner&& other) noexcept;
+    FaceAligner();
+    ~FaceAligner();
+    FaceAligner& operator=(const FaceAligner& other) = delete;
+    FaceAligner(const FaceAligner& other) = delete;
+    FaceAligner& operator=(FaceAligner&& other) noexcept;
+    FaceAligner(FaceAligner&& other) noexcept;
 
     cv::Mat align(const cv::Mat& image, const std::vector<cv::Point2f>& landmarks,
                   int face_size = 96);
@@ -29,12 +29,12 @@ public:
         const std::vector<cv::Point2f>& landmarks, const cv::Mat& M) const;
 
 private:
-    struct FaceAlignignerImpl;
-    std::unique_ptr<FaceAlignignerImpl> impl_;
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
 };
 
 struct FaceAlignerResult {
-    bool valid;
+    bool valid = false;
     cv::Mat aligned_face;
     cv::Mat M;
     cv::Mat M_inv;

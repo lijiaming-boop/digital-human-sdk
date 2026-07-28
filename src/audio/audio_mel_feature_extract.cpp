@@ -37,12 +37,20 @@ struct MelFeatureExtract::Impl {
             float center = binPoints[m + 1];
             float right = binPoints[m + 2];
 
+            // 防除零：相邻频点重合时跳过该滤波器（权重保持为零）
+            if (std::abs(center - left) < 1e-8f || std::abs(right - center) < 1e-8f) {
+                continue;
+            }
+
+            float denom_left  = center - left;
+            float denom_right = right - center;
+
             for (int k = 0; k < nFreqBins; k++) {
                 float fk = static_cast<float>(k);
                 if (fk >= left && fk <= center) {
-                    filterbank.at<float>(m, k) = (fk - left) / (center - left + 1e-10f);
+                    filterbank.at<float>(m, k) = (fk - left) / denom_left;
                 } else if (fk >= center && fk <= right) {
-                    filterbank.at<float>(m, k) = (right - fk) / (right - center + 1e-10f);
+                    filterbank.at<float>(m, k) = (right - fk) / denom_right;
                 }
             }
         }
@@ -51,7 +59,8 @@ struct MelFeatureExtract::Impl {
     }
 
     cv::Mat extract(const std::vector<std::vector<float>>& frames,
-                    const MelConfig& config) {
+                    const MelConfig& config,
+                    bool apply_minmax) {
         if (frames.empty()) {
             return cv::Mat();
         }
@@ -117,11 +126,14 @@ struct MelFeatureExtract::Impl {
             }
         }
 
-        // Step 6: Normalize to [0, 1]
-        double minVal, maxVal;
-        cv::minMaxLoc(melSpec, &minVal, &maxVal);
-        if (maxVal > minVal) {
-            melSpec = (melSpec - minVal) / (maxVal - minVal);
+        // Step 6: Normalize to [0, 1]（可选 — 统计范围为本次输入全体帧。
+        // 流式单帧调用时必须跳过，否则每帧被独立拉伸，帧间动态被破坏）
+        if (apply_minmax) {
+            double minVal, maxVal;
+            cv::minMaxLoc(melSpec, &minVal, &maxVal);
+            if (maxVal > minVal) {
+                melSpec = (melSpec - minVal) / (maxVal - minVal);
+            }
         }
 
         return melSpec;
@@ -137,8 +149,9 @@ MelFeatureExtract::MelFeatureExtract(MelFeatureExtract&&) noexcept = default;
 MelFeatureExtract& MelFeatureExtract::operator=(MelFeatureExtract&&) noexcept = default;
 
 cv::Mat MelFeatureExtract::extract(const std::vector<std::vector<float>>& frames,
-                                    const MelConfig& config) {
-    return impl_->extract(frames, config);
+                                    const MelConfig& config,
+                                    bool apply_minmax) {
+    return impl_->extract(frames, config, apply_minmax);
 }
 
 }  // namespace audio

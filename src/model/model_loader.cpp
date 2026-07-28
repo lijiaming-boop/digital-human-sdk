@@ -21,7 +21,8 @@ struct ModelLoader::Impl {
     float warmup_cost_ms = 0.0f;
 
     // default warmup input shapes
-    int audio_w = 80, audio_h = 80, audio_c = 1;
+    // 音频: 80 mel bins × 16 时间帧 (ncnn: w=时间, h=bins)
+    int audio_w = 16, audio_h = 80, audio_c = 1;
     int face_w = 96, face_h = 96, face_c = 6;
 
     static constexpr const char* kModelName = "Wav2Lip-SD-GAN-opt";
@@ -62,14 +63,14 @@ struct ModelLoader::Impl {
         if (net.load_param(param_path.c_str()) != 0) {
             std::cerr << "[ModelLoader] failed to load param: " << param_path << std::endl;
             loading = false;
-            if (callback) callback(nullptr, 0.0f, 0.0f);
+            safeCallback(callback, nullptr, 0.0f, 0.0f);
             return;
         }
 
         if (net.load_model(bin_path.c_str()) != 0) {
             std::cerr << "[ModelLoader] failed to load model: " << bin_path << std::endl;
             loading = false;
-            if (callback) callback(nullptr, 0.0f, 0.0f);
+            safeCallback(callback, nullptr, 0.0f, 0.0f);
             return;
         }
 
@@ -106,8 +107,19 @@ struct ModelLoader::Impl {
         is_loaded = true;
         loading = false;
 
-        if (callback) {
-            callback(&net, io_cost_ms, warmup_cost_ms);
+        safeCallback(callback, &net, io_cost_ms, warmup_cost_ms);
+    }
+
+    /// @brief 安全调用回调，在工作线程中捕获异常避免 std::terminate
+    void safeCallback(LoadCallback callback, ncnn::Net* net,
+                      float io_cost, float warmup_cost) noexcept {
+        if (!callback) return;
+        try {
+            callback(net, io_cost, warmup_cost);
+        } catch (const std::exception& e) {
+            std::cerr << "[ModelLoader] 回调异常 (已捕获): " << e.what() << std::endl;
+        } catch (...) {
+            std::cerr << "[ModelLoader] 回调未知异常 (已捕获)" << std::endl;
         }
     }
 };
@@ -135,6 +147,11 @@ void ModelLoader::LoadAsync(const std::string& param_path, const std::string& bi
     }
 
     impl_->loading = true;
+
+    // 确保上一次线程已 join，避免 std::terminate
+    if (impl_->loading_thread.joinable()) {
+        impl_->loading_thread.join();
+    }
     impl_->loading_thread = std::thread(&Impl::doLoad, impl_.get(),
                                          param_path, bin_path, std::move(callback));
 }

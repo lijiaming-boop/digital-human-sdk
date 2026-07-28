@@ -9,15 +9,15 @@
 #include <opencv2/opencv.hpp>
 #include "core/face_detector.h"
 
-namespace DigitalHuman {
+namespace digital_human {
 namespace core {
 
-struct FaceDetector::FaceDetectorImpl {
+struct FaceDetector::Impl {
     dlib::frontal_face_detector detector_;
     dlib::shape_predictor predictor_;
     bool is_model_loaded_ = false;
 
-    FaceDetectorImpl() {
+    Impl() {
         detector_ = dlib::get_frontal_face_detector();
     }
 
@@ -28,23 +28,38 @@ struct FaceDetector::FaceDetectorImpl {
             return faces;
         }
 
+        // dlib::rgb_pixel 要求 CV_8UC3，非 3 通道图像需要转换
+        cv::Mat image_8uc3;
+        if (image.type() != CV_8UC3) {
+            if (image.channels() == 1) {
+                cv::cvtColor(image, image_8uc3, cv::COLOR_GRAY2BGR);
+            } else if (image.channels() == 4) {
+                cv::cvtColor(image, image_8uc3, cv::COLOR_BGRA2BGR);
+            } else {
+                std::cerr << "[FaceDetector] 不支持的图像类型: " << image.type() << std::endl;
+                return faces;
+            }
+        } else {
+            image_8uc3 = image;
+        }
+
         cv::Mat process_image;
         double scale = 0.5;
         double apply_scale = 1.0;
 
         const int max_size = 1200;
         const int min_size = 100;
-        int image_height = image.rows;
-        int image_width = image.cols;
+        int image_height = image_8uc3.rows;
+        int image_width = image_8uc3.cols;
 
         if (image_height > max_size || image_width > max_size) {
-            cv::resize(image, process_image, cv::Size(0, 0), scale, scale);
+            cv::resize(image_8uc3, process_image, cv::Size(0, 0), scale, scale);
             apply_scale = scale;
         } else if (image_height < min_size || image_width < min_size) {
-            cv::resize(image, process_image, cv::Size(0, 0), 1.0 / scale, 1.0 / scale);
+            cv::resize(image_8uc3, process_image, cv::Size(0, 0), 1.0 / scale, 1.0 / scale);
             apply_scale = 1.0 / scale;
         } else {
-            process_image = image;
+            process_image = image_8uc3;
         }
 
         try {
@@ -98,9 +113,25 @@ struct FaceDetector::FaceDetectorImpl {
             return {};
         }
 
+        // dlib::rgb_pixel 要求 CV_8UC3
+        cv::Mat image_8uc3;
+        if (image.type() != CV_8UC3) {
+            if (image.channels() == 1) {
+                cv::cvtColor(image, image_8uc3, cv::COLOR_GRAY2BGR);
+            } else if (image.channels() == 4) {
+                cv::cvtColor(image, image_8uc3, cv::COLOR_BGRA2BGR);
+            } else {
+                std::cerr << "[FaceDetector] getLandmarks: 不支持的图像类型: "
+                          << image.type() << std::endl;
+                return {};
+            }
+        } else {
+            image_8uc3 = image;
+        }
+
         std::vector<cv::Point> landmarks;
         try {
-            dlib::cv_image<dlib::rgb_pixel> dlib_image(image);
+            dlib::cv_image<dlib::rgb_pixel> dlib_image(image_8uc3);
             dlib::rectangle dlib_rect(
                 face_rect.x, face_rect.y,
                 face_rect.x + face_rect.width,
@@ -118,7 +149,7 @@ struct FaceDetector::FaceDetectorImpl {
     }
 };
 
-FaceDetector::FaceDetector() : impl_(std::make_unique<FaceDetectorImpl>()) {}
+FaceDetector::FaceDetector() : impl_(std::make_unique<Impl>()) {}
 FaceDetector::~FaceDetector() = default;
 
 bool FaceDetector::loadModel(const std::filesystem::path& model_path) {
@@ -138,4 +169,4 @@ std::vector<cv::Rect> FaceDetector::detect(const cv::Mat& image) {
 }
 
 }  // namespace core
-}  // namespace DigitalHuman
+}  // namespace digital_human

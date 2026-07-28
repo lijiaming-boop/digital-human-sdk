@@ -4,7 +4,7 @@
 #include <opencv2/opencv.hpp>
 #include "core/face_mask_generator.h"
 
-using namespace DigitalHuman::Core;
+using namespace digital_human::core;
 
 // 辅助函数：创建模拟的 68 点关键点（在指定图像尺寸内）
 // 嘴部关键点索引 48~67 构成简单的椭圆形

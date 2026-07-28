@@ -5,7 +5,7 @@
 #include "core/face_detector.h"
 
 namespace fs = std::filesystem;
-using namespace DigitalHuman::core;
+using namespace digital_human::core;
 
 std::string resolvePath(const fs::path& relative) {
     fs::path dir = fs::current_path();

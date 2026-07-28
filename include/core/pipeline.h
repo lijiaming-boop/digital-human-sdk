@@ -27,13 +27,21 @@ struct PipelineConfig {
     int audio_hop_size            = 160;      ///< 音频帧移
 
     // ---- 视频参数 ----
-    double target_fps             = 25.0;     ///< 目标帧率
+    double target_fps             = 30.0;     ///< 目标帧率
     int    face_size              = 96;       ///< 对齐人脸尺寸
 
     // ---- 同步参数 ----
     double sync_threshold_ms      = 30.0;     ///< 同步阈值
     double max_drift_ms           = 100.0;    ///< 最大允许漂移
     double av_match_threshold_ms  = 40.0;     ///< 音视频匹配阈值
+
+    // ---- 口型驱动参数 ----
+    int    mel_window_frames      = 16;       ///< Wav2Lip mel 时序窗长度（mel 帧数，syncnet_mel_step_size）
+    int    mel_context_frames     = 300;      ///< 归一化滚动上下文长度（mel 帧数，~3s）
+
+    // ---- 性能开关 ----
+    bool   enable_frame_pacing    = true;     ///< 渲染帧间隔调节（离线批处理建议关闭以跑满吞吐）
+    int    opencv_num_threads     = 4;        ///< OpenCV 并行线程数（0=不设置；小图操作线程过多会因同步开销拖慢整体并与推理争抢核）
 
     // ---- 队列容量 ----
     int    audio_raw_queue_size   = 30;       ///< 音频原始数据队列容量
@@ -223,6 +231,25 @@ public:
 
     /// @brief 获取音频时钟
     double GetAudioClockMs() const;
+
+    /// @brief 设置 dlib 人脸关键点模型路径（拟合图片/视频前必须调用）
+    /// @param path 模型文件路径（shape_predictor_68_face_landmarks.dat）
+    void SetLandmarkModelPath(const std::string& path);
+
+    /// @brief 初始化内置 ModelInferencer（Wav2Lip 推理模型）
+    /// @param model_dir 模型目录（含 Wav2Lip-SD-GAN-opt.param/.bin）
+    /// @return true 初始化成功
+    bool InitModelInferencer(const std::string& model_dir);
+
+    /// @brief 设置推理线程数（0=保持 autoTune 结果）
+    ///
+    /// 注意：autoTune 在空闲环境下测得最优线程数，但在流水线并发负载下，
+    /// 推理线程与其他阶段线程在物理核/SMT 上相互争抢，最优值往往更小。
+    /// 建议在目标部署场景下实测后设定。
+    /// Call before Start(). If already initialized, the model is reloaded so
+    /// ncnn's load-time convolution pipeline uses the requested thread count.
+    void SetInferenceThreads(int n);
+
 
 private:
     struct Impl;

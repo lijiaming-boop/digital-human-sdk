@@ -26,7 +26,7 @@ namespace core {
 
 /// @brief 渲染线程配置
 struct RenderConfig {
-    double target_fps              = 25.0;   ///< 目标帧率
+    double target_fps              = 30.0;   ///< 目标帧率
     double sync_threshold_ms       = 30.0;   ///< 同步阈值（毫秒）
     double max_drift_ms            = 100.0;  ///< 最大允许漂移（毫秒）
     int    render_queue_warn       = 5;      ///< 渲染队列深度警告阈值
@@ -73,7 +73,7 @@ using FrameCallback = std::function<void(const cv::Mat& frame,
  * @brief 渲染线程
  *
  * 位于流水线末端，负责：
- * - 从渲染队列获取 RenderPacket
+ * - 从渲染队列获取 InferenceOutputPacket
  * - 通过 OutputProcessor 执行图像融合（逆变换→融合→锐化→色彩混合）
  * - 通过 AudioPlayer 获取音频时钟进行音视频同步
  * - 通过 FrameScheduler 决策 DROP/DUPLICATE/DISPLAY
@@ -111,8 +111,8 @@ public:
     // 队列
     // ========================================================================
 
-    /// @brief 设置渲染输入队列
-    void SetInputQueue(ThreadSafeQueue<RenderPacket>* queue);
+    /// @brief 设置渲染输入队列（接收 InferenceOutputPacket，含模型输出+人脸数据）
+    void SetInputQueue(ThreadSafeQueue<InferenceOutputPacket>* queue);
 
     /// @brief 设置输出帧队列（可选，用于下游消费）
     void SetOutputQueue(ThreadSafeQueue<OutputFramePacket>* queue);
@@ -147,6 +147,9 @@ public:
     RenderMetrics GetMetrics() const;
     FrameStats    GetFrameStats() const;
     int64_t       GetRenderedCount() const;
+
+    /// @brief 获取最新音视频漂移（毫秒）
+    double GetDriftMs() const;
 
 private:
     struct Impl;

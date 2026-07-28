@@ -1,0 +1,623 @@
+perf_benchmark 252891871
+perf_benchmark;[ld-linux-x86-64.so.2] 186711589
+perf_benchmark;[ld-linux-x86-64.so.2];[ld-linux-x86-64.so.2] 2174435
+perf_benchmark;[ld-linux-x86-64.so.2];[ld-linux-x86-64.so.2];[unknown] 154289
+perf_benchmark;[ld-linux-x86-64.so.2];[unknown] 25584755
+perf_benchmark;[ld-linux-x86-64.so.2];_init 3633
+perf_benchmark;[libavcodec.so.58.134.100] 20879610
+perf_benchmark;[libc.so.6] 240485778
+perf_benchmark;[libc.so.6];[unknown] 26823990
+perf_benchmark;[libc.so.6];[unknown];[unknown] 520326
+perf_benchmark;[libc.so.6];[unknown];[unknown];[unknown] 17485
+perf_benchmark;[libc.so.6];[unknown];[unknown];[unknown];[unknown] 1769
+perf_benchmark;[libc.so.6];[unknown];[unknown];[unknown];[unknown];[unknown] 8475
+perf_benchmark;[libc.so.6];main;digital_human::audio::AudioLoader::load;[libc.so.6] 14206839
+perf_benchmark;[libc.so.6];main;digital_human::audio::AudioLoader::load;[libc.so.6];[unknown] 10150522
+perf_benchmark;[libc.so.6];main;digital_human::audio::AudioLoader::load;digital_human::audio::AudioLoader::Impl::load 10731501
+perf_benchmark;[libc.so.6];main;digital_human::core::Pipeline::Init;digital_human::core::Pipeline::Impl::CreateWorkers;digital_human::core::VideoProcessor::VideoProcessor;digital_human::core::FaceDetector::FaceDetector;digital_human::core::FaceDetector::Impl::Impl;dlib::entropy_decoder_model_kernel_5<257ul, dlib::entropy_decoder_kernel_2, 200000ul, 4ul>::decode 4237666
+perf_benchmark;[libc.so.6];main;digital_human::core::Pipeline::Init;digital_human::core::Pipeline::Impl::CreateWorkers;digital_human::core::VideoProcessor::VideoProcessor;digital_human::core::FaceDetector::FaceDetector;digital_human::core::FaceDetector::Impl::Impl;dlib::get_serialized_frontal_faces[abi:cxx11];[libdigital_human_core.so] 4034664
+perf_benchmark;[libc.so.6];main;digital_human::core::Pipeline::Init;digital_human::core::Pipeline::Impl::CreateWorkers;digital_human::core::VideoProcessor::VideoProcessor;digital_human::core::FaceDetector::FaceDetector;digital_human::core::FaceDetector::Impl::Impl;dlib::get_serialized_frontal_faces[abi:cxx11];dlib::entropy_decoder_kernel_2::get_target 12431583
+perf_benchmark;[libc.so.6];main;digital_human::core::Pipeline::Init;digital_human::core::Pipeline::Impl::CreateWorkers;digital_human::core::VideoProcessor::VideoProcessor;digital_human::core::FaceDetector::FaceDetector;digital_human::core::FaceDetector::Impl::Impl;dlib::get_serialized_frontal_faces[abi:cxx11];dlib::entropy_decoder_model_kernel_5<257ul, dlib::entropy_decoder_kernel_2, 200000ul, 4ul>::decode 809681723
+perf_benchmark;[libdigital_human_core.so] 5997571
+perf_benchmark;[libnorm.so.1];[unknown] 3499377
+perf_benchmark;[libopenblasp-r0.3.20.so] 2069
+perf_benchmark;[libstdc++.so.6.0.30];[libc.so.6] 1534410
+perf_benchmark;[libstdc++.so.6.0.30];__nanosleep 3655813
+perf_benchmark;[libstdc++.so.6.0.30];cfree 117505
+perf_benchmark;[libstdc++.so.6.0.30];cv::Mat::empty 404528
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::Pipeline::PushAudio 69936
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;cfree 2634405
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;cv::Mat::Mat 2642528
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;cv::Mat::~Mat 4306774
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::AudioProcessor::Run 2912298
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::AudioProcessor::Run;clock_gettime;__vdso_clock_gettime 1657
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::AudioProcessor::Run;cv::Mat::Mat 2912993
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::AudioProcessor::Run;digital_human::audio::NoiseReduction::process 19986760
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::AudioProcessor::Run;digital_human::core::AudioProcessor::Impl::ProcessOneFrame;digital_human::audio::AudioFramer::frame 1185118
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::AudioProcessor::Run;digital_human::core::AudioProcessor::Impl::ProcessOneFrame;digital_human::audio::MelFeatureExtract::extract;cv::Mat::t 2928052
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::AudioProcessor::Run;digital_human::core::AudioProcessor::Impl::ProcessOneFrame;digital_human::audio::MelFeatureExtract::extract;digital_human::audio::MelFeatureExtract::Impl::extract 7327453
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::AudioProcessor::Run;digital_human::core::AudioProcessor::Impl::ProcessOneFrame;digital_human::audio::NoiseReduction::process;[libc.so.6] 2928052
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::AudioProcessor::Run;digital_human::core::AudioProcessor::Impl::ProcessOneFrame;digital_human::audio::NoiseReduction::process;[libm.so.6] 13318999
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::AudioProcessor::Run;digital_human::core::AudioProcessor::Impl::ProcessOneFrame;digital_human::audio::NoiseReduction::process;atan2f32 8074574
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::AudioProcessor::Run;digital_human::core::AudioProcessor::Impl::ProcessOneFrame;digital_human::audio::NoiseReduction::process;atanf32 8107714
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::AudioProcessor::Run;digital_human::core::AudioProcessor::Impl::ProcessOneFrame;digital_human::audio::NoiseReduction::process;digital_human::audio::NoiseReduction::Impl::process 10714312
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::AudioProcessor::Run;digital_human::core::AudioProcessor::Impl::ProcessOneFrame;digital_human::audio::VoiceActivityDetector::filter;digital_human::audio::VoiceActivityDetector::Impl::filter;[libc.so.6] 4134196
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::AudioProcessor::Run;digital_human::core::ThreadSafeQueue<digital_human::core::Packet<cv::Mat> >::Push 1093
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::InferenceWorker::Impl::DoInfer 2072601
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::InferenceWorker::Run;digital_human::core::InferenceWorker::Impl::DoInfer 2278039
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::InferenceWorker::Run;digital_human::core::ThreadSafeQueue<digital_human::core::InferenceTask>::WaitAndPop;cv::Mat::operator= 2357952
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::InferenceWorker::Run;digital_human::core::ThreadSafeQueue<digital_human::core::InferenceTask>::doPop 4417074
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::InferenceWorker::Run;pthread_mutex_lock 2120249
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::InferenceWorker::Run;std::vector<cv::Point_<float>, std::allocator<cv::Point_<float> > >::operator= 2233617
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::Pipeline::Impl::MatcherThread::FillMelBuffer 2878699
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::Pipeline::Impl::MatcherThread::Run;[libc.so.6] 1870990
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::Pipeline::Impl::MatcherThread::Run;clock_gettime 2444722
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::Pipeline::Impl::MatcherThread::Run;cv::Mat::~Mat 2878699
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::Pipeline::Impl::MatcherThread::Run;digital_human::core::Pipeline::Impl::MatcherThread::FillMelBuffer 2157251
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::Pipeline::Impl::MatcherThread::Run;digital_human::core::Pipeline::Impl::MatcherThread::FillMelBuffer;clock_gettime 273
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::Pipeline::Impl::MatcherThread::Run;digital_human::core::Pipeline::Impl::MatcherThread::FillMelBuffer;clock_gettime;__vdso_clock_gettime 2966394
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::Pipeline::Impl::MatcherThread::Run;digital_human::core::Pipeline::Impl::MatcherThread::FillMelBuffer;std::chrono::_V2::steady_clock::now 14
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::Pipeline::Impl::MatcherThread::Run;digital_human::core::Pipeline::Impl::MatcherThread::FillMelBuffer;std::condition_variable::notify_one 2966394
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::Pipeline::Impl::MatcherThread::Run;digital_human::core::Pipeline::Impl::MatcherThread::NormalizeWindow;cv::Mat::~Mat 115911
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::Pipeline::Impl::MatcherThread::Run;digital_human::core::ThreadSafeQueue<digital_human::core::InferenceTask>::Push 2878910
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::Pipeline::Impl::MatcherThread::Run;std::deque<digital_human::core::InferenceTask, std::allocator<digital_human::core::InferenceTask> >::_M_push_back_aux<digital_human::core::InferenceTask> 3496
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::RenderThread::Run;clock_gettime 5343
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::RenderThread::Run;cv::Mat::clone;[libc.so.6] 730182704
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::RenderThread::Run;cv::Mat::clone;cv::Mat::create;cv::Mat::release 4189997
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::RenderThread::Run;cv::Mat::clone;cv::_OutputArray::fixedType 3811378
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::RenderThread::Run;digital_human::model::OutputProcessor::ProcessROI 8058850
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::RenderThread::Run;digital_human::model::OutputProcessor::ProcessROI;[libc.so.6] 408592554
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::RenderThread::Run;digital_human::model::OutputProcessor::ProcessROI;[libdigital_human_core.so] 4254102
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::RenderThread::Run;digital_human::model::OutputProcessor::ProcessROI;cv::Mat::Mat 4053369
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::RenderThread::Run;digital_human::model::OutputProcessor::ProcessROI;cv::Mat::copyTo 7909953
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::RenderThread::Run;digital_human::model::OutputProcessor::ProcessROI;cv::utils::trace::details::Region::Region 4198744
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::RenderThread::Run;digital_human::model::OutputProcessor::ProcessROI;digital_human::model::OutputProcessor::FaceFusion;digital_human::model::OutputProcessor::Impl::doFaceFusion;cv::subtract;cv::arithm_op 42259757
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::RenderThread::Run;digital_human::model::OutputProcessor::ProcessROI;digital_human::model::OutputProcessor::FaceFusion;digital_human::model::OutputProcessor::Impl::doFaceFusion;cv::subtract;cv::arithm_op;cv::hal::cpu_baseline::sub32f 8280751
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::RenderThread::Run;digital_human::model::OutputProcessor::ProcessROI;digital_human::model::OutputProcessor::FaceFusion;digital_human::model::OutputProcessor::Impl::doFaceFusion;cv::subtract;cv::arithm_op;cv::hal::sub32f 8583350
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::RenderThread::Run;digital_human::model::OutputProcessor::ProcessROI;digital_human::model::OutputProcessor::FaceFusion;digital_human::model::OutputProcessor::Impl::doFaceFusion;cv::subtract;cv::hal::sub32f 4280374
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::RenderThread::Run;digital_human::model::OutputProcessor::ProcessROI;digital_human::model::OutputProcessor::FaceFusion;digital_human::model::OutputProcessor::Impl::doFaceFusion;digital_human::model::OutputProcessor::Impl::normalizeAlphaMask;cv::Mat::convertTo;[libc.so.6] 122442135
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::RenderThread::Run;digital_human::model::OutputProcessor::ProcessROI;digital_human::model::OutputProcessor::FaceFusion;digital_human::model::OutputProcessor::Impl::doFaceFusion;digital_human::model::OutputProcessor::Impl::normalizeAlphaMask;cv::Mat::convertTo;[libc.so.6];[unknown] 2794253
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::RenderThread::Run;digital_human::model::OutputProcessor::ProcessROI;digital_human::model::OutputProcessor::Impl::doInverseTransform;cv::warpAffine 4230449
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::RenderThread::Run;digital_human::model::OutputProcessor::ProcessROI;digital_human::model::OutputProcessor::Impl::doInverseTransformMask;digital_human::model::OutputProcessor::Impl::normalizeAlphaMask 4171501
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::RenderThread::Run;digital_human::model::OutputProcessor::ProcessROI;digital_human::model::OutputProcessor::Impl::doInverseTransformMask;digital_human::model::OutputProcessor::Impl::normalizeAlphaMask;cv::Mat::convertTo;[libc.so.6] 4222863
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::RenderThread::Run;digital_human::model::OutputProcessor::ProcessROI;digital_human::model::OutputProcessor::OutputToMat 20368516
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::RenderThread::Run;digital_human::model::OutputProcessor::ProcessROI;digital_human::model::OutputProcessor::OutputToMat;[unknown] 260155
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::RenderThread::Run;digital_human::model::OutputProcessor::ProcessROI;digital_human::model::OutputProcessor::PostProcess;cv::addWeighted;cv::arithm_op;cv::hal::addWeighted8u 3973956
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::RenderThread::Run;digital_human::model::OutputProcessor::ProcessROI;digital_human::model::OutputProcessor::PostProcess;digital_human::model::OutputProcessor::Impl::doColorBlend;cv::addWeighted;cv::arithm_op 8074667
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::RenderThread::Run;std::chrono::_V2::steady_clock::now 4353475
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::ThreadSafeQueue<digital_human::core::InferenceTask>::WaitAndPop 12978
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::ThreadSafeQueue<digital_human::core::Packet<digital_human::core::InferenceOutputData> >::Push 2333157
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run 3162379
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;[libc.so.6] 519851
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;[libc.so.6];[unknown] 521798
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;[libdigital_human_core.so] 154
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;clock_gettime 2331
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;cv::Mat::operator= 519851
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::FaceDetector::Impl::loadModel;dlib::deserialize<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >, std::allocator<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> > > >;dlib::deserialize<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> > 529651
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::FaceDetector::Impl::loadModel;dlib::deserialize<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >, std::allocator<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> > > >;dlib::deserialize<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >;dlib::deserialize<dlib::impl::split_feature, std::allocator<dlib::impl::split_feature> > 1768844
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::FaceDetector::Impl::loadModel;dlib::deserialize<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >, std::allocator<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> > > >;dlib::deserialize<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >;dlib::deserialize<dlib::impl::split_feature, std::allocator<dlib::impl::split_feature> >;dlib::deserialize_floating_point<float> 2772959
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::FaceDetector::Impl::loadModel;dlib::deserialize<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >, std::allocator<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> > > >;dlib::deserialize<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >;dlib::deserialize<dlib::impl::split_feature, std::allocator<dlib::impl::split_feature> >;dlib::deserialize_floating_point<float>;dlib::ser_helper::unpack_int<long long> 3034440
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::FaceDetector::Impl::loadModel;dlib::deserialize<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >, std::allocator<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> > > >;dlib::deserialize<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >;dlib::deserialize<dlib::impl::split_feature, std::allocator<dlib::impl::split_feature> >;dlib::deserialize_floating_point<float>;dlib::ser_helper::unpack_int<short> 2155160
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::FaceDetector::Impl::loadModel;dlib::deserialize<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >, std::allocator<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> > > >;dlib::deserialize<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >;dlib::deserialize<dlib::impl::split_feature, std::allocator<dlib::impl::split_feature> >;dlib::deserialize_floating_point<float>;std::basic_filebuf<char, std::char_traits<char> >::xsgetn 1253144
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::FaceDetector::Impl::loadModel;dlib::deserialize<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >, std::allocator<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> > > >;dlib::deserialize<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >;dlib::deserialize<dlib::impl::split_feature, std::allocator<dlib::impl::split_feature> >;dlib::ser_helper::unpack_int<unsigned long> 11172948
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::FaceDetector::Impl::loadModel;dlib::deserialize<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >, std::allocator<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> > > >;dlib::deserialize<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >;dlib::deserialize<dlib::impl::split_feature, std::allocator<dlib::impl::split_feature> >;scalbnf32 723927
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::FaceDetector::Impl::loadModel;dlib::deserialize<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >, std::allocator<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> > > >;dlib::deserialize<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >;dlib::deserialize<dlib::impl::split_feature, std::allocator<dlib::impl::split_feature> >;std::basic_filebuf<char, std::char_traits<char> >::xsgetn 552899
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::FaceDetector::Impl::loadModel;dlib::deserialize<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >, std::allocator<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> > > >;dlib::deserialize<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >;dlib::deserialize<dlib::impl::split_feature, std::allocator<dlib::impl::split_feature> >;std::vector<dlib::impl::split_feature, std::allocator<dlib::impl::split_feature> >::_M_default_append 449852
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::FaceDetector::Impl::loadModel;dlib::deserialize<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >, std::allocator<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> > > >;dlib::deserialize<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >;dlib::deserialize<dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout>, std::allocator<dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout> > > 3065153
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::FaceDetector::Impl::loadModel;dlib::deserialize<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >, std::allocator<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> > > >;dlib::deserialize<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >;dlib::deserialize<dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout>, std::allocator<dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout> > >;[libdigital_human_core.so] 3804278
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::FaceDetector::Impl::loadModel;dlib::deserialize<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >, std::allocator<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> > > >;dlib::deserialize<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >;dlib::deserialize<dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout>, std::allocator<dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout> > >;dlib::deserialize<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout> 24245743
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::FaceDetector::Impl::loadModel;dlib::deserialize<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >, std::allocator<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> > > >;dlib::deserialize<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >;dlib::deserialize<dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout>, std::allocator<dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout> > >;dlib::deserialize<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout>;[libdigital_human_core.so] 21006928
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::FaceDetector::Impl::loadModel;dlib::deserialize<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >, std::allocator<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> > > >;dlib::deserialize<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >;dlib::deserialize<dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout>, std::allocator<dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout> > >;dlib::deserialize<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout>;[libm.so.6] 97114786
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::FaceDetector::Impl::loadModel;dlib::deserialize<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >, std::allocator<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> > > >;dlib::deserialize<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >;dlib::deserialize<dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout>, std::allocator<dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout> > >;dlib::deserialize<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout>;dlib::deserialize_floating_point<float> 258001484
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::FaceDetector::Impl::loadModel;dlib::deserialize<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >, std::allocator<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> > > >;dlib::deserialize<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >;dlib::deserialize<dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout>, std::allocator<dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout> > >;dlib::deserialize<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout>;dlib::deserialize_floating_point<float>;dlib::ser_helper::unpack_int<long long> 310485272
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::FaceDetector::Impl::loadModel;dlib::deserialize<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >, std::allocator<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> > > >;dlib::deserialize<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >;dlib::deserialize<dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout>, std::allocator<dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout> > >;dlib::deserialize<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout>;dlib::deserialize_floating_point<float>;dlib::ser_helper::unpack_int<short> 239904672
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::FaceDetector::Impl::loadModel;dlib::deserialize<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >, std::allocator<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> > > >;dlib::deserialize<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >;dlib::deserialize<dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout>, std::allocator<dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout> > >;dlib::deserialize<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout>;dlib::deserialize_floating_point<float>;std::basic_filebuf<char, std::char_traits<char> >::xsgetn 213494667
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::FaceDetector::Impl::loadModel;dlib::deserialize<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >, std::allocator<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> > > >;dlib::deserialize<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >;dlib::deserialize<dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout>, std::allocator<dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout> > >;dlib::deserialize<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout>;dlib::ser_helper::unpack_int<long long> 5949783
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::FaceDetector::Impl::loadModel;dlib::deserialize<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >, std::allocator<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> > > >;dlib::deserialize<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >;dlib::deserialize<dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout>, std::allocator<dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout> > >;dlib::deserialize<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout>;dlib::ser_helper::unpack_int<long> 4262371
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::FaceDetector::Impl::loadModel;dlib::deserialize<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >, std::allocator<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> > > >;dlib::deserialize<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >;dlib::deserialize<dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout>, std::allocator<dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout> > >;dlib::deserialize<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout>;dlib::ser_helper::unpack_int<short> 12059155
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::FaceDetector::Impl::loadModel;dlib::deserialize<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >, std::allocator<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> > > >;dlib::deserialize<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >;dlib::deserialize<dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout>, std::allocator<dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout> > >;dlib::deserialize<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout>;scalbnf32 144356511
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::FaceDetector::Impl::loadModel;dlib::deserialize<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >, std::allocator<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> > > >;dlib::deserialize<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >;dlib::deserialize<dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout>, std::allocator<dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout> > >;dlib::deserialize<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout>;std::basic_filebuf<char, std::char_traits<char> >::xsgetn 1175213
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::FaceDetector::Impl::loadModel;dlib::deserialize<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >, std::allocator<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> > > >;dlib::deserialize<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >;dlib::deserialize<dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout>, std::allocator<dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout> > >;dlib::deserialize_floating_point<float> 8440009
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::FaceDetector::Impl::loadModel;dlib::deserialize<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >, std::allocator<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> > > >;dlib::deserialize<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >;dlib::deserialize<dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout>, std::allocator<dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout> > >;malloc 2338385
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::FaceDetector::Impl::loadModel;dlib::deserialize<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >, std::allocator<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> > > >;dlib::deserialize<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >;dlib::deserialize<dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout>, std::allocator<dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout> > >;operator new 2524918
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::FaceDetector::Impl::loadModel;dlib::deserialize<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >, std::allocator<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> > > >;dlib::deserialize<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >;dlib::deserialize<dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout>, std::allocator<dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout> > >;operator new[] 5169434
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::FaceDetector::Impl::loadModel;dlib::deserialize<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >, std::allocator<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> > > >;dlib::deserialize<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >;dlib::deserialize<dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout>, std::allocator<dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout> > >;std::vector<dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout>, std::allocator<dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout> > >::_M_default_append 1730453
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::FaceDetector::Impl::loadModel;dlib::deserialize<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >, std::allocator<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> > > >;dlib::deserialize<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >;dlib::deserialize<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout> 1017659
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::FaceDetector::Impl::loadModel;dlib::deserialize<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >, std::allocator<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> > > >;dlib::deserialize<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >;dlib::deserialize_floating_point<float> 581934
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::FaceDetector::Impl::loadModel;dlib::deserialize<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >, std::allocator<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> > > >;dlib::deserialize<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >;std::vector<dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout>, std::allocator<dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout> > >::_M_default_append 1258352
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::FaceDetector::Impl::loadModel;dlib::deserialize<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >, std::allocator<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> > > >;dlib::deserialize<dlib::impl::split_feature, std::allocator<dlib::impl::split_feature> > 529343
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::FaceDetector::Impl::loadModel;dlib::deserialize<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >, std::allocator<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> > > >;dlib::deserialize<dlib::impl::split_feature, std::allocator<dlib::impl::split_feature> >@plt 260155
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::FaceDetector::Impl::loadModel;dlib::deserialize<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> >, std::allocator<std::vector<dlib::impl::regression_tree, std::allocator<dlib::impl::regression_tree> > > >;dlib::deserialize<dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout>, std::allocator<dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout> > > 558433
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::FaceDetector::Impl::loadModel;dlib::deserialize<std::vector<dlib::vector<float, 2l>, std::allocator<dlib::vector<float, 2l> > >, std::allocator<std::vector<dlib::vector<float, 2l>, std::allocator<dlib::vector<float, 2l> > > > >;dlib::deserialize<dlib::vector<float, 2l>, std::allocator<dlib::vector<float, 2l> > >;[libm.so.6] 525390
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::FaceDetector::Impl::loadModel;dlib::deserialize<std::vector<dlib::vector<float, 2l>, std::allocator<dlib::vector<float, 2l> > >, std::allocator<std::vector<dlib::vector<float, 2l>, std::allocator<dlib::vector<float, 2l> > > > >;dlib::deserialize<dlib::vector<float, 2l>, std::allocator<dlib::vector<float, 2l> > >;dlib::deserialize_floating_point<float> 530595
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::FaceDetector::Impl::loadModel;dlib::deserialize<std::vector<dlib::vector<float, 2l>, std::allocator<dlib::vector<float, 2l> > >, std::allocator<std::vector<dlib::vector<float, 2l>, std::allocator<dlib::vector<float, 2l> > > > >;dlib::deserialize<dlib::vector<float, 2l>, std::allocator<dlib::vector<float, 2l> > >;dlib::deserialize_floating_point<float>;dlib::ser_helper::unpack_int<long long> 768422
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::ThreadSafeQueue<digital_human::core::Packet<digital_human::core::ProcessedFaceData> >::Push 549906
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::VideoProcessor::Impl::ProcessOne 2079404
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::VideoProcessor::Impl::ProcessOne;digital_human::core::FaceDetector::detect;digital_human::core::FaceDetector::Impl::detect;dlib::object_detector<dlib::scan_fhog_pyramid<dlib::pyramid_down<6u>, dlib::default_fhog_feature_extractor> >::operator;dlib::object_detector<dlib::scan_fhog_pyramid<dlib::pyramid_down<6u>, dlib::default_fhog_feature_extractor> >::operator 56898783
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::VideoProcessor::Impl::ProcessOne;digital_human::core::FaceDetector::detect;digital_human::core::FaceDetector::Impl::detect;dlib::object_detector<dlib::scan_fhog_pyramid<dlib::pyramid_down<6u>, dlib::default_fhog_feature_extractor> >::operator;dlib::object_detector<dlib::scan_fhog_pyramid<dlib::pyramid_down<6u>, dlib::default_fhog_feature_extractor> >::operator;dlib::impl::apply_filters_to_fhog<dlib::scan_fhog_pyramid<dlib::pyramid_down<6u>, dlib::default_fhog_feature_extractor>::fhog_filterbank>;dlib::float_spatially_filter_image_separable<dlib::array2d<float, dlib::memory_manager_stateless_kernel_1<char> >, dlib::array2d<float, dlib::memory_manager_stateless_kernel_1<char> >, dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout>, dlib::matrix<float, 0l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout> > 78027129
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::VideoProcessor::Impl::ProcessOne;digital_human::core::FaceDetector::detect;digital_human::core::FaceDetector::Impl::detect;dlib::object_detector<dlib::scan_fhog_pyramid<dlib::pyramid_down<6u>, dlib::default_fhog_feature_extractor> >::operator;dlib::object_detector<dlib::scan_fhog_pyramid<dlib::pyramid_down<6u>, dlib::default_fhog_feature_extractor> >::operator;dlib::impl_fhog::impl_extract_fhog_features<dlib::array2d<dlib::rgb_pixel, dlib::memory_manager_stateless_kernel_1<char> >, dlib::array<dlib::array2d<float, dlib::memory_manager_stateless_kernel_1<char> >, dlib::memory_manager_stateless_kernel_1<char> > > 31323685
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::VideoProcessor::Impl::ProcessOne;digital_human::core::FaceDetector::detect;digital_human::core::FaceDetector::Impl::detect;dlib::object_detector<dlib::scan_fhog_pyramid<dlib::pyramid_down<6u>, dlib::default_fhog_feature_extractor> >::operator;dlib::object_detector<dlib::scan_fhog_pyramid<dlib::pyramid_down<6u>, dlib::default_fhog_feature_extractor> >::operator;dlib::impl_fhog::impl_extract_fhog_features<dlib::array2d<dlib::rgb_pixel, dlib::memory_manager_stateless_kernel_1<char> >, dlib::array<dlib::array2d<float, dlib::memory_manager_stateless_kernel_1<char> >, dlib::memory_manager_stateless_kernel_1<char> > >;dlib::impl_fhog::get_gradient<dlib::const_image_view<dlib::array2d<dlib::rgb_pixel, dlib::memory_manager_stateless_kernel_1<char> > > > 56235927
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::VideoProcessor::Impl::ProcessOne;digital_human::core::FaceDetector::detect;digital_human::core::FaceDetector::Impl::detect;dlib::object_detector<dlib::scan_fhog_pyramid<dlib::pyramid_down<6u>, dlib::default_fhog_feature_extractor> >::operator;dlib::object_detector<dlib::scan_fhog_pyramid<dlib::pyramid_down<6u>, dlib::default_fhog_feature_extractor> >::operator;dlib::impl_fhog::impl_extract_fhog_features<dlib::cv_image<dlib::rgb_pixel>, dlib::array<dlib::array2d<float, dlib::memory_manager_stateless_kernel_1<char> >, dlib::memory_manager_stateless_kernel_1<char> > > 15215120
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::VideoProcessor::Impl::ProcessOne;digital_human::core::FaceDetector::detect;digital_human::core::FaceDetector::Impl::detect;dlib::object_detector<dlib::scan_fhog_pyramid<dlib::pyramid_down<6u>, dlib::default_fhog_feature_extractor> >::operator;dlib::object_detector<dlib::scan_fhog_pyramid<dlib::pyramid_down<6u>, dlib::default_fhog_feature_extractor> >::operator;dlib::impl_fhog::impl_extract_fhog_features<dlib::cv_image<dlib::rgb_pixel>, dlib::array<dlib::array2d<float, dlib::memory_manager_stateless_kernel_1<char> >, dlib::memory_manager_stateless_kernel_1<char> > >;dlib::impl_fhog::get_gradient<dlib::const_image_view<dlib::cv_image<dlib::rgb_pixel> > > 20362501
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::VideoProcessor::Impl::ProcessOne;digital_human::core::FaceDetector::detect;digital_human::core::FaceDetector::Impl::detect;dlib::object_detector<dlib::scan_fhog_pyramid<dlib::pyramid_down<6u>, dlib::default_fhog_feature_extractor> >::operator;dlib::object_detector<dlib::scan_fhog_pyramid<dlib::pyramid_down<6u>, dlib::default_fhog_feature_extractor> >::operator;dlib::impl_fhog::impl_extract_fhog_features<dlib::cv_image<dlib::rgb_pixel>, dlib::array<dlib::array2d<float, dlib::memory_manager_stateless_kernel_1<char> >, dlib::memory_manager_stateless_kernel_1<char> > >;dlib::matrix<float, 18l, 1l, dlib::memory_manager_stateless_kernel_1<char>, dlib::row_major_layout>::literal_assign_helper::~literal_assign_helper 663770
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::VideoProcessor::Impl::ProcessOne;digital_human::core::FaceDetector::getLandmarks;digital_human::core::FaceDetector::Impl::getLandmarks;dlib::shape_predictor::operator 8329288
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadBase::Start;digital_human::core::VideoProcessor::Run;digital_human::core::VideoProcessor::Impl::ProcessOne;std::vector<cv::Point_<float>, std::allocator<cv::Point_<float> > >::operator= 519851
+perf_benchmark;[libstdc++.so.6.0.30];digital_human::core::ThreadSafeQueue<digital_human::core::Packet<cv::Mat> >::WaitAndPop 428532
+perf_benchmark;[libstdc++.so.6.0.30];operator delete 54262
+perf_benchmark;[libstdc++.so.6.0.30];std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda 6353934
+perf_benchmark;[libstdc++.so.6.0.30];std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda;[libc.so.6] 1540644
+perf_benchmark;[libstdc++.so.6.0.30];std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda;[libdigital_human_core.so] 5603
+perf_benchmark;[libstdc++.so.6.0.30];std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda;clock_gettime 423291
+perf_benchmark;[libstdc++.so.6.0.30];std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda;cv::Mat::clone;[libc.so.6] 1295099441
+perf_benchmark;[libstdc++.so.6.0.30];std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda;cv::Mat::clone;[libc.so.6];[unknown] 402521513
+perf_benchmark;[libstdc++.so.6.0.30];std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda;cv::Mat::clone;[libc.so.6];[unknown];[unknown] 7728983
+perf_benchmark;[libstdc++.so.6.0.30];std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda;cv::Mat::clone;[libc.so.6];[unknown];[unknown];[unknown] 1575471
+perf_benchmark;[libstdc++.so.6.0.30];std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda;cv::Mat::clone;[libc.so.6];[unknown];[unknown];[unknown];[unknown] 13338432
+perf_benchmark;[libstdc++.so.6.0.30];std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda;cv::Mat::clone;cv::Mat::copyTo 5734855
+perf_benchmark;[libstdc++.so.6.0.30];std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda;cv::Mat::clone;cv::Mat::create;cv::Mat::create 1630375
+perf_benchmark;[libstdc++.so.6.0.30];std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda;cv::Mat::clone;cv::Mat::create;cv::Mat::release 1
+perf_benchmark;[libstdc++.so.6.0.30];std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda;cv::Mat::clone;cv::_InputArray::kind 2020053
+perf_benchmark;[libstdc++.so.6.0.30];std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda;cv::Mat::clone;cv::_OutputArray::create 2
+perf_benchmark;[libstdc++.so.6.0.30];std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda;cv::Mat::operator= 5058
+perf_benchmark;[libstdc++.so.6.0.30];std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda;digital_human::core::Pipeline::PushAudio 4855
+perf_benchmark;[libstdc++.so.6.0.30];std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda;digital_human::core::Pipeline::PushAudio;__vdso_clock_gettime 3190
+perf_benchmark;[libstdc++.so.6.0.30];std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda;digital_human::core::Pipeline::PushAudio;digital_human::core::ThreadSafeQueue<digital_human::core::Packet<std::vector<float, std::allocator<float> > > >::Push 1954504
+perf_benchmark;[libstdc++.so.6.0.30];std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda;digital_human::core::Pipeline::PushAudio;pthread_cond_wait 193
+perf_benchmark;[libstdc++.so.6.0.30];std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda;digital_human::core::Pipeline::PushAudio;pthread_mutex_unlock 5677
+perf_benchmark;[libstdc++.so.6.0.30];std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda;digital_human::core::Pipeline::PushVideo;pthread_cond_signal 1638651
+perf_benchmark;[libstdc++.so.6.0.30];std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda;digital_human::core::Pipeline::PushVideo;std::condition_variable::wait 3486221
+perf_benchmark;[libstdc++.so.6.0.30];std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda;digital_human::core::ThreadSafeQueue<digital_human::core::Packet<cv::Mat> >::WaitAndPop 334175
+perf_benchmark;[libstdc++.so.6.0.30];std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda;pthread_mutex_lock 325878
+perf_benchmark;[libstdc++.so.6.0.30];std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda;std::chrono::_V2::steady_clock::now 875
+perf_benchmark;[libswresample.so.3.9.100] 189277983
+perf_benchmark;[unknown];[ld-linux-x86-64.so.2] 6671633
+perf_benchmark;[unknown];[ld-linux-x86-64.so.2];[ld-linux-x86-64.so.2];[ld-linux-x86-64.so.2] 5779808
+perf_benchmark;[unknown];[libavcodec.so.58.134.100] 632893612
+perf_benchmark;[unknown];[libavcodec.so.58.134.100];[unknown];[libavcodec.so.58.134.100] 3418978
+perf_benchmark;[unknown];[libavcodec.so.58.134.100];[unknown];av_frame_unref 3694296
+perf_benchmark;[unknown];[libavcodec.so.58.134.100];[unknown];av_freep 3450417
+perf_benchmark;[unknown];[libavcodec.so.58.134.100];[unknown];av_packet_unref 3555085
+perf_benchmark;[unknown];[libavcodec.so.58.134.100];[unknown];avpriv_mpegaudio_decode_header 3362182
+perf_benchmark;[unknown];[libavutil.so.56.70.100] 3808941
+perf_benchmark;[unknown];[libc.so.6] 136692310
+perf_benchmark;[unknown];[libc.so.6];[libc.so.6] 10815844
+perf_benchmark;[unknown];[libc.so.6];[unknown] 3501392
+perf_benchmark;[unknown];[libc.so.6];_IO_default_xsputn 3159735
+perf_benchmark;[unknown];[libdigital_human_core.so] 23362218
+perf_benchmark;[unknown];[libopenblasp-r0.3.20.so] 26346
+perf_benchmark;[unknown];[unknown];[ld-linux-x86-64.so.2] 8449198
+perf_benchmark;[unknown];[unknown];[libc.so.6] 13827985
+perf_benchmark;[unknown];[unknown];[libc.so.6];[unknown] 2169061
+perf_benchmark;[unknown];[unknown];[libdigital_human_core.so] 1855870
+perf_benchmark;[unknown];[unknown];[libstdc++.so.6.0.30] 6648608
+perf_benchmark;[unknown];[unknown];[libswresample.so.3.9.100] 6685202
+perf_benchmark;[unknown];[unknown];[unknown];GOMP_parallel 28121096
+perf_benchmark;[unknown];[unknown];[unknown];GOMP_parallel;[libdigital_human_core.so] 2121548
+perf_benchmark;[unknown];[unknown];[unknown];GOMP_parallel;ncnn::Crop_x86_avx512::forward 117104041
+perf_benchmark;[unknown];[unknown];[unknown];GOMP_parallel;ncnn::Padding_x86_avx512::forward 607104430
+perf_benchmark;[unknown];[unknown];[unknown];GOMP_parallel;ncnn::ReLU_x86_avx512::forward_inplace 153972597
+perf_benchmark;[unknown];[unknown];[unknown];GOMP_parallel;ncnn::Sigmoid_x86_avx512::forward_inplace 6595957
+perf_benchmark;[unknown];[unknown];[unknown];GOMP_parallel;ncnn::cast_fp16_to_fp32_sse 21333828
+perf_benchmark;[unknown];[unknown];[unknown];GOMP_parallel;ncnn::cast_fp16_to_fp32_sse;[unknown] 6890540
+perf_benchmark;[unknown];[unknown];[unknown];GOMP_parallel;ncnn::conv3x3s1_winograd43_transform_input_tile 1335280519
+perf_benchmark;[unknown];[unknown];[unknown];GOMP_parallel;ncnn::conv3x3s1_winograd43_transform_kernel 145608545
+perf_benchmark;[unknown];[unknown];[unknown];GOMP_parallel;ncnn::conv3x3s1_winograd43_transform_kernel;[unknown] 11961833
+perf_benchmark;[unknown];[unknown];[unknown];GOMP_parallel;ncnn::conv3x3s1_winograd63_transform_input_tile 241238023
+perf_benchmark;[unknown];[unknown];[unknown];GOMP_parallel;ncnn::convolution_im2col_gemm 658879050
+perf_benchmark;[unknown];[unknown];[unknown];GOMP_parallel;ncnn::convolution_im2col_gemm;ncnn::convolution_im2col_input_tile_conv1x1s1d1 72196720
+perf_benchmark;[unknown];[unknown];[unknown];GOMP_parallel;ncnn::convolution_im2col_gemm_transform_kernel 4210161
+perf_benchmark;[unknown];[unknown];[unknown];GOMP_parallel;ncnn::convolution_im2col_input_tile_avx512<3, 3, 1, 1, 2, 2>;ncnn::convolution_im2col_input_tile_impl 159209649
+perf_benchmark;[unknown];[unknown];[unknown];GOMP_parallel;ncnn::convolution_packed 1814215315
+perf_benchmark;[unknown];[unknown];[unknown];GOMP_parallel;ncnn::transpose_pack_B_tile 1013510081
+perf_benchmark;[unknown];[unknown];[unknown];GOMP_parallel;omp_get_num_threads 25835263
+perf_benchmark;[unknown];[unknown];[unknown];[libc.so.6] 210869361
+perf_benchmark;[unknown];[unknown];[unknown];[libc.so.6];[unknown] 3643791
+perf_benchmark;[unknown];[unknown];[unknown];[libdigital_human_core.so] 6226635
+perf_benchmark;[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[libc.so.6] 8537508
+perf_benchmark;[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[libc.so.6] 2220956
+perf_benchmark;[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[libc.so.6] 3613567
+perf_benchmark;[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[libc.so.6] 3444440
+perf_benchmark;[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[libc.so.6] 2377351
+perf_benchmark;[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[libc.so.6] 4142175
+perf_benchmark;[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[libc.so.6];[unknown] 718
+perf_benchmark;[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[libc.so.6] 15691109
+perf_benchmark;[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[libdigital_human_core.so] 2444853
+perf_benchmark;[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[libstdc++.so.6.0.30] 7259648
+perf_benchmark;[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];__lll_lock_wait_private 5135978
+perf_benchmark;[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];_dl_allocate_tls_init 3731057
+perf_benchmark;[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];_dl_deallocate_tls 4444
+perf_benchmark;[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];cfree 22144162
+perf_benchmark;[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];ncnn::PoolAllocator::fastFree 71468768
+perf_benchmark;[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];ncnn::PoolAllocator::fastMalloc 73893427
+perf_benchmark;[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];operator delete 12481841
+perf_benchmark;[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];pthread_create 18338140
+perf_benchmark;[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];pthread_mutex_lock 3346008
+perf_benchmark;[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];std::__detail::_List_node_base::_M_unhook 43779825
+perf_benchmark;[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];__lll_lock_wait_private;[unknown] 7322560
+perf_benchmark;[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];__munmap;[unknown] 1046429
+perf_benchmark;[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];pthread_create;[unknown] 9173353
+perf_benchmark;[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];__lll_lock_wait_private;[unknown];[unknown];[unknown] 1
+perf_benchmark;[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];[unknown];__lll_lock_wait_private;[unknown];[unknown];[unknown];[unknown];[unknown] 3000
+perf_benchmark;[unknown];[unknown];[unknown];[unknown];[unknown];pthread_detach 15
+perf_benchmark;[unknown];[unknown];[unknown];[unknown];[unknown];pthread_self 1
+perf_benchmark;[unknown];[unknown];[unknown];cfree 200
+perf_benchmark;[unknown];[unknown];[unknown];ncnn::Padding::forward 1
+perf_benchmark;[unknown];[unknown];[unknown];ncnn::ReLU_x86_avx512::forward_inplace 1766879
+perf_benchmark;[unknown];[unknown];[unknown];ncnn::binary_op_no_broadcast 1875436
+perf_benchmark;[unknown];[unknown];[unknown];ncnn::conv3x3s1_winograd43 136976617
+perf_benchmark;[unknown];[unknown];[unknown];ncnn::conv3x3s1_winograd43;ncnn::conv3x3s1_winograd43_transform_output_tile 3655312131
+perf_benchmark;[unknown];[unknown];[unknown];ncnn::conv3x3s1_winograd43;ncnn::conv3x3s1_winograd43_transform_output_tile;[unknown] 2153771
+perf_benchmark;[unknown];[unknown];[unknown];ncnn::conv3x3s1_winograd43;ncnn::gemm_transB_packed_tile 70138585387
+perf_benchmark;[unknown];[unknown];[unknown];ncnn::conv3x3s1_winograd43;ncnn::gemm_transB_packed_tile;[unknown] 40640097
+perf_benchmark;[unknown];[unknown];[unknown];ncnn::conv3x3s1_winograd43_transform_input_tile 217
+perf_benchmark;[unknown];[unknown];[unknown];ncnn::conv3x3s1_winograd43_transform_output_tile 6406943
+perf_benchmark;[unknown];[unknown];[unknown];ncnn::conv3x3s1_winograd63 9290044
+perf_benchmark;[unknown];[unknown];[unknown];ncnn::conv3x3s1_winograd63;ncnn::conv3x3s1_winograd63_transform_output_tile 208408238
+perf_benchmark;[unknown];[unknown];[unknown];ncnn::conv3x3s1_winograd63;ncnn::gemm_transB_packed_tile 335341638
+perf_benchmark;[unknown];[unknown];[unknown];ncnn::conv3x3s1_winograd63_transform_output_tile 1922719
+perf_benchmark;[unknown];[unknown];[unknown];ncnn::gemm_AT_x86 37812098
+perf_benchmark;[unknown];[unknown];[unknown];ncnn::gemm_AT_x86;ncnn::gemm_transB_packed_tile 22781804877
+perf_benchmark;[unknown];[unknown];[unknown];ncnn::gemm_AT_x86;ncnn::gemm_transB_packed_tile;[unknown] 3021738
+perf_benchmark;[unknown];[unknown];[unknown];ncnn::get_omp_thread_num 5891007
+perf_benchmark;[unknown];[unknown];[unknown];omp_get_num_threads 76427223
+perf_benchmark;[unknown];[unknown];[unknown];omp_get_thread_num 9225829
+perf_benchmark;[unknown];[unknown];[unknown];pthread_detach 1
+perf_benchmark;[unknown];[unknown];av_get_channel_layout_nb_channels 3464807
+perf_benchmark;[unknown];[unknown];cfree 3261550
+perf_benchmark;[unknown];[unknown];cv::CCSIDFT<float> 143548
+perf_benchmark;[unknown];[unknown];malloc 8146506
+perf_benchmark;[unknown];[unknown];ncnn::BinaryOp_x86_avx512::forward 3492931
+perf_benchmark;[unknown];[unknown];ncnn::Convolution::make_padding 2513326
+perf_benchmark;[unknown];[unknown];ncnn::Deconvolution::cut_padding 1665106
+perf_benchmark;[unknown];[unknown];ncnn::Extractor::input 3620345
+perf_benchmark;[unknown];[unknown];ncnn::Gemm_x86_avx512::create_pipeline;ncnn::transpose_pack_A_tile 33023935
+perf_benchmark;[unknown];[unknown];ncnn::Gemm_x86_avx512::create_pipeline;ncnn::transpose_pack_A_tile;[unknown] 8770705
+perf_benchmark;[unknown];[unknown];ncnn::Layer::destroy_pipeline 1667463
+perf_benchmark;[unknown];[unknown];ncnn::Layer_final::create_pipeline 1855789
+perf_benchmark;[unknown];[unknown];ncnn::Layer_final::destroy_pipeline 1742942
+perf_benchmark;[unknown];[unknown];ncnn::Mat::create 21537813
+perf_benchmark;[unknown];[unknown];ncnn::NetPrivate::convert_layout 5724334
+perf_benchmark;[unknown];[unknown];ncnn::NetPrivate::do_forward_layer 43130544
+perf_benchmark;[unknown];[unknown];ncnn::NetPrivate::do_forward_layer;GOMP_parallel 1802602
+perf_benchmark;[unknown];[unknown];ncnn::NetPrivate::do_forward_layer;[libc.so.6] 462286890
+perf_benchmark;[unknown];[unknown];ncnn::NetPrivate::do_forward_layer;[libc.so.6];[unknown] 6718644
+perf_benchmark;[unknown];[unknown];ncnn::NetPrivate::do_forward_layer;ncnn::BinaryOp_x86_avx512::forward 9963796
+perf_benchmark;[unknown];[unknown];ncnn::NetPrivate::do_forward_layer;ncnn::Concat_x86_avx512::forward 9445156
+perf_benchmark;[unknown];[unknown];ncnn::NetPrivate::do_forward_layer;ncnn::binary_op_broadcast 3697130
+perf_benchmark;[unknown];[unknown];ncnn::NetPrivate::forward_layer 92557442
+perf_benchmark;[unknown];[unknown];ncnn::Padding::forward 12
+perf_benchmark;[unknown];[unknown];ncnn::Split::forward 14437702
+perf_benchmark;[unknown];[unknown];ncnn::conv3x3s1_winograd63;ncnn::conv3x3s1_winograd63_transform_input_tile;[unknown] 17632
+perf_benchmark;[unknown];[unknown];ncnn::copy_cut_border 1467631
+perf_benchmark;[unknown];[unknown];ncnn::copy_cut_border;ncnn::Mat::create 1987786
+perf_benchmark;[unknown];[unknown];ncnn::copy_make_border 3863482
+perf_benchmark;[unknown];[unknown];operator delete 7735460
+perf_benchmark;[unknown];[unknown];operator new 2565350
+perf_benchmark;[unknown];[unknown];posix_memalign 2386271
+perf_benchmark;[unknown];[unknown];pthread_detach 15547
+perf_benchmark;[unknown];[unknown];pthread_mutex_lock 5547578
+perf_benchmark;[unknown];[unknown];pthread_mutex_unlock 2421083
+perf_benchmark;[unknown];[unknown];pthread_self 69231
+perf_benchmark;[unknown];[unknown];std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::_M_append 2457931
+perf_benchmark;[unknown];_IO_do_write 3655584
+perf_benchmark;[unknown];_IO_file_write 2717866
+perf_benchmark;[unknown];_IO_file_xsputn 3373955
+perf_benchmark;[unknown];__getpagesize 1110250
+perf_benchmark;[unknown];__libc_calloc 2812719
+perf_benchmark;[unknown];__lll_lock_wait_private 1
+perf_benchmark;[unknown];__lll_lock_wake_private 16
+perf_benchmark;[unknown];__sched_yield 11206571
+perf_benchmark;[unknown];__sched_yield;[unknown] 498995494
+perf_benchmark;[unknown];__sched_yield;[unknown];[unknown] 19028427
+perf_benchmark;[unknown];__sched_yield;[unknown];[unknown];[unknown];[unknown];[unknown] 10627726
+perf_benchmark;[unknown];__sched_yield;[unknown];[unknown];[unknown];[unknown];[unknown];[unknown] 16254621
+perf_benchmark;[unknown];_dl_deallocate_tls 156486
+perf_benchmark;[unknown];_dl_deallocate_tls;[unknown] 1466
+perf_benchmark;[unknown];av_freep 3612183
+perf_benchmark;[unknown];av_sample_fmt_is_planar 3968689
+perf_benchmark;[unknown];avpriv_mpegaudio_decode_header 3314945
+perf_benchmark;[unknown];blas_memory_alloc 275
+perf_benchmark;[unknown];cbrtf32x 2213501
+perf_benchmark;[unknown];cfree 11808
+perf_benchmark;[unknown];cv::(anonymous namespace)::ParallelLoopBodyWrapper::operator;[libc.so.6] 11960459
+perf_benchmark;[unknown];cv::(anonymous namespace)::ParallelLoopBodyWrapper::operator;cv::Mat::Mat 7824027
+perf_benchmark;[unknown];cv::(anonymous namespace)::ParallelLoopBodyWrapper::operator;cv::WarpAffineInvoker::operator 113135812
+perf_benchmark;[unknown];cv::(anonymous namespace)::ParallelLoopBodyWrapper::operator;cv::cpu_baseline::(anonymous namespace)::fixedSmoothInvoker<unsigned char, cv::(anonymous namespace)::ufixedpoint16>::operator 18788342
+perf_benchmark;[unknown];cv::(anonymous namespace)::ParallelLoopBodyWrapper::operator;cv::cpu_baseline::(anonymous namespace)::hlineSmooth5Nabcba<unsigned char, cv::(anonymous namespace)::ufixedpoint16> 3930382
+perf_benchmark;[unknown];cv::(anonymous namespace)::ParallelLoopBodyWrapper::operator;cv::cpu_baseline::(anonymous namespace)::vlineSmooth5N<unsigned char, cv::(anonymous namespace)::ufixedpoint16> 19101849
+perf_benchmark;[unknown];cv::(anonymous namespace)::ParallelLoopBodyWrapper::operator;cv::hal::warpAffineBlockline 1879112972
+perf_benchmark;[unknown];cv::(anonymous namespace)::ParallelLoopBodyWrapper::operator;cv::hal::warpAffineBlockline;[unknown] 3955042
+perf_benchmark;[unknown];cv::(anonymous namespace)::ParallelLoopBodyWrapper::operator;cv::remap 7736818
+perf_benchmark;[unknown];cv::(anonymous namespace)::ParallelLoopBodyWrapper::operator;operator new[] 4215018
+perf_benchmark;[unknown];cv::BlendLinearInvoker<unsigned char>::operator 4108983
+perf_benchmark;[unknown];cv::DFT<float> 5286891
+perf_benchmark;[unknown];cv::DFTInit 24297386
+perf_benchmark;[unknown];cv::Mat::Mat 15404635
+perf_benchmark;[unknown];cv::Mat::create 4073940
+perf_benchmark;[unknown];cv::Mat::empty 7695369
+perf_benchmark;[unknown];cv::Mat::operator= 30516386
+perf_benchmark;[unknown];cv::Mat::~Mat 14300461
+perf_benchmark;[unknown];cv::NAryMatIterator::init 4261977
+perf_benchmark;[unknown];cv::OcvDftImpl::apply 2436828
+perf_benchmark;[unknown];cv::OcvDftImpl::~OcvDftImpl;[unknown];[libstdc++.so.6.0.30] 1
+perf_benchmark;[unknown];cv::OcvDftImpl::~OcvDftImpl;[unknown];cv::hal::DFT1D::create 1
+perf_benchmark;[unknown];cv::OcvDftImpl::~OcvDftImpl;[unknown];malloc 13
+perf_benchmark;[unknown];cv::OcvDftImpl::~OcvDftImpl;[unknown];operator new 1
+perf_benchmark;[unknown];cv::RemapInvoker::operator 3255437
+perf_benchmark;[unknown];cv::StdMatAllocator::~StdMatAllocator;[unknown];[unknown];cfree 325878
+perf_benchmark;[unknown];cv::StdMatAllocator::~StdMatAllocator;[unknown];[unknown];cv::Mat::~Mat 17288591
+perf_benchmark;[unknown];cv::StdMatAllocator::~StdMatAllocator;[unknown];[unknown];cv::UMatData::~UMatData 11534704
+perf_benchmark;[unknown];cv::TLSData<cv::CoreTLSData>::~TLSData;[unknown];cv::TLSDataContainer::getData 17894567
+perf_benchmark;[unknown];cv::TLSData<cv::CoreTLSData>::~TLSData;[unknown];cv::details::getTlsStorage 2878699
+perf_benchmark;[unknown];cv::TLSData<cv::CoreTLSData>::~TLSData;[unknown];pthread_getspecific 899626
+perf_benchmark;[unknown];cv::WarpAffineInvoker::operator 3845261
+perf_benchmark;[unknown];cv::WarpAffineInvoker::~WarpAffineInvoker;[unknown];[unknown];cv::theRNG 2137
+perf_benchmark;[unknown];cv::WorkerThread::thread_body 25990578
+perf_benchmark;[unknown];cv::_InputArray::empty 3732813
+perf_benchmark;[unknown];cv::_InputArray::size 7550648
+perf_benchmark;[unknown];cv::_OutputArray::create 4025864
+perf_benchmark;[unknown];cv::borderInterpolate 46285464
+perf_benchmark;[unknown];cv::cpu_baseline::(anonymous namespace)::hlineSmooth5Nabcba<unsigned char, cv::(anonymous namespace)::ufixedpoint16> 1590920230
+perf_benchmark;[unknown];cv::details::saveFPDenormalsState 3763093
+perf_benchmark;[unknown];cv::fastFree 2335250
+perf_benchmark;[unknown];cv::finalizeHdr 16086427
+perf_benchmark;[unknown];cv::getCoreTlsData 8105154
+perf_benchmark;[unknown];cv::getInitializationMutex;[unknown] 79994
+perf_benchmark;[unknown];cv::hal::cpu_baseline::addWeighted8u 4637726617
+perf_benchmark;[unknown];cv::hal::cpu_baseline::addWeighted8u;[unknown] 4168673
+perf_benchmark;[unknown];cv::hal::cpu_baseline::sub32f 234873345
+perf_benchmark;[unknown];cv::hal::warpAffine 4462896
+perf_benchmark;[unknown];cv::hal::warpAffine;cv::Mat::~Mat 4157499
+perf_benchmark;[unknown];cv::hal::warpAffine;cv::WarpAffineInvoker::operator 24109249
+perf_benchmark;[unknown];cv::hal::warpAffine;cv::hal::warpAffineBlockline 645085996
+perf_benchmark;[unknown];cv::hal::warpAffineBlockline 23336244
+perf_benchmark;[unknown];cv::parallel_for_ 4236253
+perf_benchmark;[unknown];cv::parallel_for_;cv::Mat::create 4234059
+perf_benchmark;[unknown];cv::parallel_for_;cv::Mat::operator= 21152614
+perf_benchmark;[unknown];cv::parallel_for_;cv::RemapInvoker::operator 16250108
+perf_benchmark;[unknown];cv::remap 8108930
+perf_benchmark;[unknown];cv::remap;cv::Mat::Mat 29762207
+perf_benchmark;[unknown];cv::remap;cv::Mat::Mat;cv::Mat::create 8352762
+perf_benchmark;[unknown];cv::remap;cv::Mat::Mat;cv::UMatData::UMatData 4215026
+perf_benchmark;[unknown];cv::remap;cv::Mat::Mat;malloc 3820177
+perf_benchmark;[unknown];cv::remap;cv::Mat::Mat;operator new 3562771
+perf_benchmark;[unknown];cv::remap;cv::Mat::create;cv::Mat::create 16661123
+perf_benchmark;[unknown];cv::remap;cv::Mat::operator= 71057075
+perf_benchmark;[unknown];cv::remap;cv::Mat::~Mat 26931681
+perf_benchmark;[unknown];cv::remap;cv::RemapInvoker::operator 118500831
+perf_benchmark;[unknown];cv::remap;cv::remapBilinear<cv::Cast<float, float>, cv::RemapNoVec<false>, float, false> 7578429
+perf_benchmark;[unknown];cv::remapBilinear<cv::Cast<float, float>, cv::RemapNoVec<false>, float, false> 1866614892
+perf_benchmark;[unknown];cv::resizeAreaFast_Invoker<unsigned char, int, cv::ResizeAreaFastVec<unsigned char, cv::ResizeAreaFastNoVec<unsigned char, unsigned char> > >::operator 4722012
+perf_benchmark;[unknown];cv::softdouble::operator/ 4117579
+perf_benchmark;[unknown];cv::transpose_32s 2912298
+perf_benchmark;[unknown];cv::updateContinuityFlag 3726892
+perf_benchmark;[unknown];decompress_onepass 2784461
+perf_benchmark;[unknown];digital_human::core::RenderThread::Run;[libc.so.6];[unknown] 4351375
+perf_benchmark;[unknown];dlartg_ 4389535
+perf_benchmark;[unknown];dlasr_ 4383651
+perf_benchmark;[unknown];dlib::base64::decode 2449618
+perf_benchmark;[unknown];dlib::entropy_decoder_kernel_2::~entropy_decoder_kernel_2;[unknown];dlib::entropy_decoder_kernel_2::decode 4375644
+perf_benchmark;[unknown];malloc 3799100
+perf_benchmark;[unknown];ncnn::BinaryOp_x86_avx512::~BinaryOp_x86_avx512;[unknown];ncnn::NetPrivate::convert_layout 5072104
+perf_benchmark;[unknown];ncnn::BinaryOp_x86_avx512::~BinaryOp_x86_avx512;[unknown];ncnn::cpu_support_x86_avx512 1778592
+perf_benchmark;[unknown];ncnn::Cast_x86_avx512::forward 9441102
+perf_benchmark;[unknown];ncnn::Concat_x86_avx512::~Concat_x86_avx512;[unknown];ncnn::NetPrivate::convert_layout 3228083
+perf_benchmark;[unknown];ncnn::Convolution::make_padding 4985908
+perf_benchmark;[unknown];ncnn::Convolution_x86_avx512::~Convolution_x86_avx512;[unknown];ncnn::NetPrivate::convert_layout 2712725
+perf_benchmark;[unknown];ncnn::Crop::Crop 1463936
+perf_benchmark;[unknown];ncnn::Crop::~Crop;[unknown];ncnn::Crop::Crop 4081900
+perf_benchmark;[unknown];ncnn::Crop::~Crop;[unknown];ncnn::Crop_x86_avx512::~Crop_x86_avx512 3079629
+perf_benchmark;[unknown];ncnn::Crop_x86_avx512::forward 32
+perf_benchmark;[unknown];ncnn::Crop_x86_avx512::~Crop_x86_avx512;[unknown];ncnn::cpu_support_x86_f16c 1643894
+perf_benchmark;[unknown];ncnn::Deconvolution_x86_avx512::forward 1697665
+perf_benchmark;[unknown];ncnn::Deconvolution_x86_avx512::~Deconvolution_x86_avx512;[unknown];[unknown];GOMP_parallel;ncnn::Deconvolution_x86_avx512::forward 235087188
+perf_benchmark;[unknown];ncnn::Deconvolution_x86_avx512::~Deconvolution_x86_avx512;[unknown];[unknown];GOMP_parallel;omp_get_num_threads 1942031
+perf_benchmark;[unknown];ncnn::Extractor::~Extractor;[unknown];ncnn::Extractor::extract 2141034
+perf_benchmark;[unknown];ncnn::Extractor::~Extractor;[unknown];ncnn::Extractor::extract;[libc.so.6] 15264707
+perf_benchmark;[unknown];ncnn::Gemm::forward 3738142
+perf_benchmark;[unknown];ncnn::Gemm::forward;ncnn::Gemm_x86_avx512::forward 15528229
+perf_benchmark;[unknown];ncnn::Gemm::forward;pthread_mutex_lock 5151000
+perf_benchmark;[unknown];ncnn::Layer::destroy_pipeline 1653159
+perf_benchmark;[unknown];ncnn::Layer::~Layer;[unknown];ncnn::Layer::Layer 2145377
+perf_benchmark;[unknown];ncnn::Layer_final::create_pipeline 2318920
+perf_benchmark;[unknown];ncnn::Layer_final::~Layer_final;[unknown];[unknown];[unknown];[libc.so.6] 3402174
+perf_benchmark;[unknown];ncnn::Layer_final::~Layer_final;[unknown];cfree 4504009
+perf_benchmark;[unknown];ncnn::Layer_final::~Layer_final;[unknown];ncnn::Cast_x86_avx512::forward 5223081
+perf_benchmark;[unknown];ncnn::Layer_final::~Layer_final;[unknown];ncnn::Layer::destroy_pipeline 2399705
+perf_benchmark;[unknown];ncnn::Layer_final::~Layer_final;[unknown];ncnn::Layer_final::create_pipeline 7773686
+perf_benchmark;[unknown];ncnn::Layer_final::~Layer_final;[unknown];ncnn::Layer_final::destroy_pipeline 11560897
+perf_benchmark;[unknown];ncnn::Layer_final::~Layer_final;[unknown];ncnn::Layer_final::forward 2083160
+perf_benchmark;[unknown];ncnn::Layer_final::~Layer_final;[unknown];ncnn::Layer_final::load_param 4004865
+perf_benchmark;[unknown];ncnn::Layer_final::~Layer_final;[unknown];ncnn::Layer_final::~Layer_final 4230675
+perf_benchmark;[unknown];ncnn::Layer_final::~Layer_final;[unknown];ncnn::Padding_x86_avx512::destroy_pipeline 7357957
+perf_benchmark;[unknown];ncnn::Layer_final::~Layer_final;[unknown];ncnn::Padding_x86_avx512::forward 2502095
+perf_benchmark;[unknown];ncnn::Layer_final::~Layer_final;[unknown];ncnn::Padding_x86_avx512::~Padding_x86_avx512 2592860
+perf_benchmark;[unknown];ncnn::Layer_final::~Layer_final;[unknown];ncnn::ParamDict::ParamDict 3513945
+perf_benchmark;[unknown];ncnn::Layer_final::~Layer_final;[unknown];ncnn::cast_float32_to_float16 2253641
+perf_benchmark;[unknown];ncnn::Layer_final::~Layer_final;[unknown];ncnn::copy_make_border 4060681
+perf_benchmark;[unknown];ncnn::Layer_final::~Layer_final;[unknown];ncnn::copy_make_border;ncnn::Mat::create 73545
+perf_benchmark;[unknown];ncnn::Layer_final::~Layer_final;[unknown];ncnn::copy_make_border;ncnn::Padding_x86_avx512::forward 13826804
+perf_benchmark;[unknown];ncnn::Layer_final::~Layer_final;[unknown];operator delete 4561651
+perf_benchmark;[unknown];ncnn::Mat::create 13431184
+perf_benchmark;[unknown];ncnn::Net::~Net;[unknown];ncnn::Convolution::load_model 2454256
+perf_benchmark;[unknown];ncnn::Net::~Net;[unknown];ncnn::Net::load_model;ncnn::Convolution_x86_avx512::create_pipeline;[unknown];posix_memalign 3540678
+perf_benchmark;[unknown];ncnn::Net::~Net;[unknown];ncnn::Net::load_model;ncnn::Deconvolution_x86_avx512::create_pipeline 67810523
+perf_benchmark;[unknown];ncnn::Net::~Net;[unknown];ncnn::Net::load_model;ncnn::Deconvolution_x86_avx512::create_pipeline;[unknown] 1574219
+perf_benchmark;[unknown];ncnn::Net::~Net;[unknown];ncnn::Net::load_model;ncnn::Deconvolution_x86_avx512::create_pipeline;[unknown];[unknown];[unknown];[unknown] 1733010
+perf_benchmark;[unknown];ncnn::Net::~Net;[unknown];ncnn::Net::load_param 3940077
+perf_benchmark;[unknown];ncnn::NetPrivate::do_forward_layer 14055397
+perf_benchmark;[unknown];ncnn::Padding::Padding 5898147
+perf_benchmark;[unknown];ncnn::Padding::forward 4742101
+perf_benchmark;[unknown];ncnn::Padding_x86_avx512::forward 12640496
+perf_benchmark;[unknown];ncnn::Padding_x86_avx512::~Padding_x86_avx512;[unknown];ncnn::Padding_x86_avx512::Padding_x86_avx512 3628694
+perf_benchmark;[unknown];ncnn::Padding_x86_avx512::~Padding_x86_avx512;[unknown];ncnn::Padding_x86_avx512::~Padding_x86_avx512 4154873
+perf_benchmark;[unknown];ncnn::Padding_x86_avx512::~Padding_x86_avx512;[unknown];ncnn::cpu_support_x86_f16c 4820202
+perf_benchmark;[unknown];ncnn::ParamDict::~ParamDict 10189053
+perf_benchmark;[unknown];ncnn::ParamDict::~ParamDict;[unknown];ncnn::Crop::load_param 1768770
+perf_benchmark;[unknown];ncnn::ParamDict::~ParamDict;[unknown];ncnn::Padding::load_param 5674378
+perf_benchmark;[unknown];ncnn::ParamDict::~ParamDict;[unknown];ncnn::ParamDict::ParamDict 15144622
+perf_benchmark;[unknown];ncnn::ParamDict::~ParamDict;[unknown];ncnn::ParamDict::get 10855923
+perf_benchmark;[unknown];ncnn::ParamDict::~ParamDict;ncnn::BinaryOp_x86_avx512::forward;ncnn::ParamDict::ParamDict 2114876
+perf_benchmark;[unknown];ncnn::ParamDict::~ParamDict;ncnn::Convolution_x86_avx512::forward;ncnn::ParamDict::ParamDict 2461016
+perf_benchmark;[unknown];ncnn::PoolAllocator::fastMalloc 17265246
+perf_benchmark;[unknown];ncnn::ReLU_x86_avx512::forward_inplace 11802924
+perf_benchmark;[unknown];ncnn::ReLU_x86_avx512::~ReLU_x86_avx512;[unknown];ncnn::NetPrivate::convert_layout 4389115
+perf_benchmark;[unknown];ncnn::Sigmoid_x86_avx512::forward_inplace 1
+perf_benchmark;[unknown];ncnn::Split::~Split;[unknown];ncnn::NetPrivate::convert_layout 3276159
+perf_benchmark;[unknown];ncnn::Split::~Split;[unknown];ncnn::cpu_support_x86_avx512 1954396
+perf_benchmark;[unknown];ncnn::binary_op_no_broadcast 21732938
+perf_benchmark;[unknown];ncnn::cast_float32_to_float16 5759932
+perf_benchmark;[unknown];ncnn::conv3x3s1_winograd43 9224888
+perf_benchmark;[unknown];ncnn::conv3x3s1_winograd43_transform_input_tile 6402648
+perf_benchmark;[unknown];ncnn::conv3x3s1_winograd43_transform_input_tile;[unknown] 16
+perf_benchmark;[unknown];ncnn::conv3x3s1_winograd63 1871318
+perf_benchmark;[unknown];ncnn::conv3x3s1_winograd63_transform_input_tile 980
+perf_benchmark;[unknown];ncnn::conv3x3s1_winograd63_transform_kernel 1
+perf_benchmark;[unknown];ncnn::convolution_im2col_gemm 10591716
+perf_benchmark;[unknown];ncnn::convolution_im2col_gemm;[unknown] 14
+perf_benchmark;[unknown];ncnn::convolution_packed 1
+perf_benchmark;[unknown];ncnn::float32_to_float16 2101946
+perf_benchmark;[unknown];ncnn::gemm_AT_x86 18586715
+perf_benchmark;[unknown];ncnn::get_cpu_level2_cache_size 6759415
+perf_benchmark;[unknown];ncnn::get_optimal_tile_mnk 21158841
+perf_benchmark;[unknown];ncnn::get_physical_cpu_count 1619699
+perf_benchmark;[unknown];ncnn::transpose_pack_B_tile 8263051
+perf_benchmark;[unknown];omp_get_num_threads 50814149
+perf_benchmark;[unknown];omp_get_num_threads;[unknown] 2102
+perf_benchmark;[unknown];omp_get_thread_num 2198323
+perf_benchmark;[unknown];operator delete 4206908
+perf_benchmark;[unknown];operator new 8475221
+perf_benchmark;[unknown];posix_memalign 3537708
+perf_benchmark;[unknown];pthread_cond_clockwait 316242
+perf_benchmark;[unknown];pthread_cond_wait 5091298
+perf_benchmark;[unknown];pthread_create 1
+perf_benchmark;[unknown];pthread_create;[unknown] 6413690
+perf_benchmark;[unknown];pthread_detach 4519833
+perf_benchmark;[unknown];pthread_mutex_lock 59665733
+perf_benchmark;[unknown];pthread_mutex_unlock 65636931
+perf_benchmark;[unknown];pthread_self 1950877
+perf_benchmark;[unknown];std::__detail::_List_node_base::_M_hook 16124439
+perf_benchmark;[unknown];std::basic_filebuf<char, std::char_traits<char> >::~basic_filebuf;[unknown];[libc.so.6] 67512961
+perf_benchmark;[unknown];std::basic_filebuf<char, std::char_traits<char> >::~basic_filebuf;[unknown];[libstdc++.so.6.0.30] 457226
+perf_benchmark;[unknown];std::basic_filebuf<char, std::char_traits<char> >::~basic_filebuf;[unknown];std::basic_streambuf<char, std::char_traits<char> >::xsgetn 110370904
+perf_benchmark;[unknown];std::vector<int, std::allocator<int> >::operator= 11077777
+perf_benchmark;[unknown];virtual thunk to std::basic_ostream<char, std::char_traits<char> >::~basic_ostream;[unknown];std::ostream::_M_insert<double>;[libstdc++.so.6.0.30] 325878
+perf_benchmark;_GLOBAL__sub_I_audio_cmvn.cpp 219
+perf_benchmark;_GLOBAL__sub_I_audio_cmvn.cpp;[unknown] 13
+perf_benchmark;_IO_setb 325878
+perf_benchmark;__call_tls_dtors 6174395
+perf_benchmark;__ctype_init 764332
+perf_benchmark;__ctype_init;[unknown] 1226894
+perf_benchmark;__libc_calloc 2306872
+perf_benchmark;__libc_memalign 2325375
+perf_benchmark;__lll_lock_wait_private 2
+perf_benchmark;__lll_lock_wake_private 7752
+perf_benchmark;__lll_lock_wake_private;[unknown] 2418
+perf_benchmark;__lll_lock_wake_private;[unknown];[unknown];[unknown] 7586
+perf_benchmark;__madvise 4335215
+perf_benchmark;__madvise;[unknown] 3343505
+perf_benchmark;__madvise;[unknown];[unknown] 505
+perf_benchmark;__madvise;[unknown];[unknown];[unknown] 6408
+perf_benchmark;__madvise;[unknown];[unknown];[unknown];[unknown];[unknown] 409824
+perf_benchmark;__mmap;[unknown] 4533
+perf_benchmark;__mprotect;[unknown] 21411611
+perf_benchmark;__sched_yield;[unknown] 38102315
+perf_benchmark;__sched_yield;[unknown];[unknown];[unknown];[unknown];[unknown] 12531251
+perf_benchmark;__sigsetjmp 331744
+perf_benchmark;__sigsetjmp;[unknown] 7697
+perf_benchmark;_dl_allocate_tls 2122763
+perf_benchmark;_dl_allocate_tls_init 7882651
+perf_benchmark;_setjmp 28427
+perf_benchmark;av_strncasecmp 1251348
+perf_benchmark;blas_memory_alloc;[unknown] 4690
+perf_benchmark;cfree 51313976
+perf_benchmark;cv::BlendLinearInvoker<unsigned char>::operator 6606363660
+perf_benchmark;cv::BlendLinearInvoker<unsigned char>::operator;[unknown] 4629187
+perf_benchmark;cv::DFT<float> 10556200
+perf_benchmark;cv::Mat::Mat 75431142
+perf_benchmark;cv::OcvDftBasicImpl::~OcvDftBasicImpl;[unknown];cv::checkHardwareSupport 3658
+perf_benchmark;cv::ParallelJob::execute 4430244
+perf_benchmark;cv::ThresholdRunner::operator 757378641
+perf_benchmark;cv::WorkerThread::WorkerThread;cv::resizeAreaFast_Invoker<unsigned char, int, cv::ResizeAreaFastVec<unsigned char, cv::ResizeAreaFastNoVec<unsigned char, unsigned char> > >::operator 1494664
+perf_benchmark;cv::borderInterpolate 3465215
+perf_benchmark;cv::cpu_baseline::(anonymous namespace)::vlineSmooth5N<unsigned char, cv::(anonymous namespace)::ufixedpoint16> 8740986282
+perf_benchmark;cv::cpu_baseline::(anonymous namespace)::vlineSmooth5N<unsigned char, cv::(anonymous namespace)::ufixedpoint16>;[unknown] 4047311
+perf_benchmark;cv::cpu_baseline::GEMMSingleMul<float, double> 52149908
+perf_benchmark;cv::fastMalloc 4216810
+perf_benchmark;cv::getConvertScaleFunc 2878699
+perf_benchmark;cv::hal::warpAffineBlockline 12760795
+perf_benchmark;cv::minMaxIdx_32f 6301646
+perf_benchmark;cv::remapBilinear<cv::Cast<float, float>, cv::RemapNoVec<false>, float, false> 1110258088
+perf_benchmark;cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapNoVec<false>, short, false> 4351649444
+perf_benchmark;cv::setSize 227
+perf_benchmark;cv::softdouble::operator* 4175937
+perf_benchmark;cv::softfloat_normRoundPackToF64 4257749
+perf_benchmark;cv::updateContinuityFlag 46934353
+perf_benchmark;decode_mcu 3931772
+perf_benchmark;fileno_unlocked 1734024
+perf_benchmark;h2v2_fancy_upsample 11541734
+perf_benchmark;jpeg_idct_islow 25889338
+perf_benchmark;malloc 88377964
+perf_benchmark;ncnn::Cast::Cast 3773126
+perf_benchmark;ncnn::Convolution_x86_avx512::forward 4961265
+perf_benchmark;ncnn::Layer::Layer 2523048
+perf_benchmark;ncnn::Layer::~Layer 10337667
+perf_benchmark;ncnn::NetPrivate::do_forward_layer 29310653
+perf_benchmark;ncnn::NetPrivate::do_forward_layer;[libc.so.6] 2767041
+perf_benchmark;ncnn::NetPrivate::do_forward_layer;[libdigital_human_core.so] 2212518
+perf_benchmark;ncnn::NetPrivate::do_forward_layer;cfree 1497894
+perf_benchmark;ncnn::NetPrivate::do_forward_layer;ncnn::Convolution::make_padding 6033260
+perf_benchmark;ncnn::NetPrivate::do_forward_layer;ncnn::Convolution_x86_avx512::forward 69894636
+perf_benchmark;ncnn::NetPrivate::do_forward_layer;ncnn::Convolution_x86_avx512::forward;GOMP_parallel 1539693
+perf_benchmark;ncnn::NetPrivate::do_forward_layer;ncnn::Convolution_x86_avx512::forward;[libdigital_human_core.so] 7007990
+perf_benchmark;ncnn::NetPrivate::do_forward_layer;ncnn::Convolution_x86_avx512::forward;ncnn::PoolAllocator::fastFree 18372972
+perf_benchmark;ncnn::NetPrivate::do_forward_layer;ncnn::Convolution_x86_avx512::forward;ncnn::conv3x3s1_winograd43 28938809
+perf_benchmark;ncnn::NetPrivate::do_forward_layer;ncnn::Convolution_x86_avx512::forward;ncnn::conv3x3s1_winograd43;ncnn::conv3x3s1_winograd43_transform_input_tile 23544665
+perf_benchmark;ncnn::NetPrivate::do_forward_layer;ncnn::Convolution_x86_avx512::forward;ncnn::conv3x3s1_winograd63;ncnn::conv3x3s1_winograd63_transform_input_tile 19653343
+perf_benchmark;ncnn::NetPrivate::do_forward_layer;ncnn::Convolution_x86_avx512::forward;pthread_mutex_lock 25723093
+perf_benchmark;ncnn::NetPrivate::do_forward_layer;ncnn::Convolution_x86_avx512::forward;pthread_mutex_unlock 2127190
+perf_benchmark;ncnn::NetPrivate::do_forward_layer;ncnn::Deconvolution_x86_avx512::forward 30498080
+perf_benchmark;ncnn::NetPrivate::do_forward_layer;ncnn::Gemm::forward 1684684
+perf_benchmark;ncnn::NetPrivate::do_forward_layer;ncnn::Mat::create 3863710
+perf_benchmark;ncnn::NetPrivate::do_forward_layer;ncnn::PoolAllocator::fastFree 10197417
+perf_benchmark;ncnn::NetPrivate::do_forward_layer;ncnn::ReLU_x86_avx512::forward_inplace 12964593
+perf_benchmark;ncnn::NetPrivate::do_forward_layer;ncnn::conv3x3s1_winograd43 1611051
+perf_benchmark;ncnn::NetPrivate::do_forward_layer;ncnn::test_prefer_winograd23 4110312
+perf_benchmark;ncnn::NetPrivate::do_forward_layer;pthread_mutex_lock 4232292
+perf_benchmark;ncnn::Padding::forward 3183
+perf_benchmark;ncnn::Padding_x86_avx512::Padding_x86_avx512 1849803
+perf_benchmark;ncnn::Padding_x86_avx512_layer_creator 5194076
+perf_benchmark;ncnn::ParamDict::clear 12990658
+perf_benchmark;ncnn::ReLU_x86_avx512::forward_inplace 14805838
+perf_benchmark;ncnn::binary_op_no_broadcast 18161524
+perf_benchmark;ncnn::binary_op_no_broadcast;ncnn::binary_op_vector 27029407
+perf_benchmark;ncnn::binary_op_no_broadcast;ncnn::binary_op_vector<ncnn::BinaryOp_x86_avx512_functor::binary_op_add> 2578106592
+perf_benchmark;ncnn::binary_op_no_broadcast;ncnn::binary_op_vector<ncnn::BinaryOp_x86_avx512_functor::binary_op_add>;[unknown] 2656171
+perf_benchmark;ncnn::binary_op_vector 16776554
+perf_benchmark;ncnn::binary_op_vector<ncnn::BinaryOp_x86_avx512_functor::binary_op_add> 18912109
+perf_benchmark;ncnn::copy_make_border_image<float> 6257173
+perf_benchmark;ncnn::cpu_support_x86_avx512 3844347
+perf_benchmark;ncnn::create_layer 6250278
+perf_benchmark;ncnn::create_layer_cpu 12489622
+perf_benchmark;ncnn::gemm_AT_x86 179
+perf_benchmark;ncnn::gemm_AT_x86;ncnn::transpose_pack_B_tile 351957684
+perf_benchmark;pthread_cond_broadcast 2966394
+perf_benchmark;pthread_cond_signal 2023753
+perf_benchmark;pthread_create 17
+perf_benchmark;pthread_create;[unknown];[unknown] 3580837
+perf_benchmark;pthread_mutex_unlock 6534125
+perf_benchmark;read 3042743
+perf_benchmark;read;[unknown] 7022273
+perf_benchmark;register_tm_clones 1
+perf_benchmark;std::__basic_file<char>::fd 478144
+perf_benchmark;std::__basic_file<char>::xsgetn 2524861
+perf_benchmark;std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::_M_mutate 519851
+perf_benchmark;std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::compare 7969801
+perf_benchmark;std::basic_filebuf<char, std::char_traits<char> >::underflow 5190810
+perf_benchmark;std::basic_filebuf<char, std::char_traits<char> >::xsgetn 71618415
+perf_benchmark;std::basic_streambuf<char, std::char_traits<char> >::xsgetn 37766237
+perf_benchmark;std::codecvt<char, char, __mbstate_t>::do_always_noconv 2860750
+perf_benchmark;std::vector<int, std::allocator<int> >::operator= 1789937
+perf_benchmark;std::vector<ncnn::Mat, std::allocator<ncnn::Mat> >::_M_default_append 2781409
+perf_benchmark;std::vector<ncnn::Mat, std::allocator<ncnn::Mat> >::operator= 9252077
+perf_benchmark;ycc_rgb_convert 7960346

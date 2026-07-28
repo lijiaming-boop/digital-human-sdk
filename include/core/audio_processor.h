@@ -48,13 +48,19 @@ struct AudioProcessorConfig {
 /**
  * @brief 音频处理线程
  *
- * 从音频缓冲区读取 PCM 数据，经过完整音频特征提取流水线
- * （降噪→分帧→VAD→预加重→RMS归一化→Mel频谱→CMVN），
+ * 从音频缓冲区读取 PCM 数据，经过音频特征提取流水线
+ * （降噪→流式RMS归一化→预加重→分帧→VAD→Mel频谱，dB 域 log-mel），
  * 将 Mel 特征推送到推理队列。
+ *
+ * 归一化职责划分（重要）：
+ * - 本线程【不】做 min-max / CMVN。单帧 min-max 会摧毁帧间能量动态，
+ *   单帧 CMVN 输出恒为零矩阵（均值=帧本身），二者都是口型同步失效的根因。
+ * - 归一化由下游 AVMatcher 在 16 帧时序窗 + 滚动上下文上统一执行。
+ * - RMS 归一化采用 EMA 全局近似，保留帧间相对响度。
  *
  * 实时性保证：
  * - 读取 RingBuffer 不阻塞 PortAudio 回调路径
- * - 滑动窗口管理，每 hop=10ms 输出一帧特征
+ * - 滑动窗口管理，每 hop=10ms 输出一帧特征（1×80 dB log-mel）
  * - 空闲时休眠，不空转 CPU
  *
  * 两种数据源模式：
@@ -109,6 +115,16 @@ public:
      * @param buffer RingBuffer 实例指针（外部管理生命周期）
      */
     void SetRingBuffer(audio::RingBuffer* buffer);
+
+    /**
+     * @brief 设置 ThreadSafeQueue 输入（队列模式）
+     *
+     * 从 ThreadSafeQueue 读取 AudioRawPacket，适用于 Pipeline 编排。
+     * 队列模式与 RingBuffer/固定源模式互斥，仅选其一。
+     *
+     * @param queue AudioRawPacket 队列指针（外部管理生命周期）
+     */
+    void SetInputQueue(ThreadSafeQueue<AudioRawPacket>* queue);
 
     // ========================================================================
     // 输出队列

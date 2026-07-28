@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <deque>
 #include <iostream>
 #include <sstream>
 #include <vector>
@@ -63,8 +64,8 @@ struct InferenceWorker::Impl {
     ThreadSafeQueue<InferenceTask>*         input_queue_  = nullptr;
     ThreadSafeQueue<InferenceOutputPacket>* output_queue_ = nullptr;
 
-    // ---- 重试队列（用于失败重试） ----
-    std::vector<InferenceTask> retry_queue_;
+    // ---- 重试队列（用于失败重试，deque 保证前端 O(1) 删除） ----
+    std::deque<InferenceTask> retry_queue_;
 
     // ---- 统计 ----
     std::atomic<int64_t> total_inferences_{0};
@@ -82,7 +83,7 @@ struct InferenceWorker::Impl {
     double      ewma_latency_ms_     = 0.0;
 
     // ---- 输入结束标记 ----
-    bool input_eos_ = false;
+    std::atomic<bool> input_eos_{false};
 
     // ---- 积压检测 ----
     std::atomic<bool> backlogged_{false};
@@ -92,6 +93,12 @@ struct InferenceWorker::Impl {
     std::vector<double> recent_latencies_;
     size_t recent_max_samples_ = 200;
 
+    // ---- 人脸张量缓存（拟合场景：同一对齐人脸反复推理，仅在 worker 线程访问） ----
+    mutable ncnn::Mat     cached_face_tensor_;
+    mutable const uchar*  cached_face_ptr_ = nullptr;
+    mutable int           cached_face_w_   = 0;
+    mutable int           cached_face_h_   = 0;
+
     // ========================================================================
     // 张量转换
     // ========================================================================
@@ -99,82 +106,93 @@ struct InferenceWorker::Impl {
     /**
      * @brief Mel 频谱 cv::Mat → ncnn::Mat
      *
-     * cv::Mat: (rows=T, cols=mel_bins, type=CV_32F)
-     * ncnn::Mat: (w=mel_bins, h=T, c=1)
+     * 模型输入布局（与 ModelInferencer warmup 一致）：
+     *   ncnn::Mat(w=时间帧数, h=mel_bins, c=1)，row(bin)[t] = mel(t, bin)
+     *
+     * 旧实现产出 (w=mel_bins, h=T)，与模型期望布局转置相反 ——
+     * 时序卷积在 mel bin 维度上滑动，输入退化，口型驱动失效。
      */
     ncnn::Mat MelToNCNN(const cv::Mat& mel) const {
         if (mel.empty()) return ncnn::Mat();
 
-        int mel_bins = mel.cols;
-        int T        = mel.rows;
+        int T        = mel.rows;   ///< 时间帧数
+        int mel_bins = mel.cols;   ///< mel bins
 
-        ncnn::Mat out(mel_bins, T, 1);
-        // 逐行拷贝: cv::Mat 行优先 → ncnn::Mat (w, h, c)
-        for (int y = 0; y < T; ++y) {
-            const float* src_row = mel.ptr<float>(y);
-            float* dst_row = out.channel(0).row(y);
-            std::memcpy(dst_row, src_row, mel_bins * sizeof(float));
+        ncnn::Mat out(T, mel_bins, 1);
+        for (int b = 0; b < mel_bins; ++b) {
+            float* dst = out.channel(0).row(b);
+            for (int t = 0; t < T; ++t) {
+                dst[t] = mel.at<float>(t, b);
+            }
         }
         return out;
     }
 
     /**
-     * @brief 对齐人脸 cv::Mat → ncnn::Mat (6通道)
+     * @brief 对齐人脸 cv::Mat → ncnn::Mat (6通道)，Wav2Lip 标准格式
      *
-     * Wav2Lip 要求 6 通道输入：前 3 通道 = 人脸 BGR，
-     * 后 3 通道 = 副本（对口型优化）。
+     *   ch0-2: 下半脸遮罩人脸（y >= h/2 置零）—— 强制模型依据音频
+     *          重建嘴部区域。旧实现将完整人脸复制两份，模型可直接
+     *          复制输入嘴部（走捷径），口型不随音频变化。
+     *   ch3-5: 完整人脸
+     *
+     * 向量化实现（convertTo + split + memcpy），替代逐像素 at<> 循环。
+     * 同一 aligned_face 数据指针命中缓存时直接复用
+     * （静态图片拟合场景 VideoProcessor 缓存使指针恒定，~100% 命中）。
      */
-    ncnn::Mat FaceToNCNN(const cv::Mat& face) const {
-        if (face.empty()) return ncnn::Mat();
+    ncnn::Mat FaceToNCNN(const cv::Mat& face_in) const {
+        if (face_in.empty()) return ncnn::Mat();
 
-        int w = face.cols;
-        int h = face.rows;
-
-        if (face.channels() == 3) {
-            // 单帧: BGR → RGB 并复制为 6 通道
-            ncnn::Mat out(w, h, 6);
-            for (int y = 0; y < h; ++y) {
-                for (int x = 0; x < w; ++x) {
-                    cv::Vec3b bgr = face.at<cv::Vec3b>(y, x);
-                    // 前 3 通道: RGB
-                    out.channel(0).row(y)[x] = static_cast<float>(bgr[2]) / 255.0f;
-                    out.channel(1).row(y)[x] = static_cast<float>(bgr[1]) / 255.0f;
-                    out.channel(2).row(y)[x] = static_cast<float>(bgr[0]) / 255.0f;
-                    // 后 3 通道: 副本
-                    out.channel(3).row(y)[x] = static_cast<float>(bgr[2]) / 255.0f;
-                    out.channel(4).row(y)[x] = static_cast<float>(bgr[1]) / 255.0f;
-                    out.channel(5).row(y)[x] = static_cast<float>(bgr[0]) / 255.0f;
-                }
-            }
-            return out;
+        // 规范化为 3 通道 BGR
+        cv::Mat face;
+        if (face_in.channels() == 3) {
+            face = face_in;
+        } else if (face_in.channels() == 1) {
+            cv::cvtColor(face_in, face, cv::COLOR_GRAY2BGR);
+        } else if (face_in.channels() == 4) {
+            cv::cvtColor(face_in, face, cv::COLOR_BGRA2BGR);
+        } else {
+            return ncnn::Mat();
         }
 
-        if (face.channels() == 6) {
-            // 已经是 6 通道，直接 float 化
-            ncnn::Mat out(w, h, 6);
-            for (int y = 0; y < h; ++y) {
-                for (int x = 0; x < w; ++x) {
-                    for (int c = 0; c < 6; ++c) {
-                        out.channel(c).row(y)[x] =
-                            face.at<cv::Vec<float, 6>>(y, x)[c];
-                    }
-                }
-            }
-            return out;
+        const int w = face.cols;
+        const int h = face.rows;
+
+        // 缓存命中：同一图像数据（VideoProcessor 人脸缓存复用同一 Mat）
+        if (cached_face_ptr_ == face_in.data
+            && cached_face_w_ == w && cached_face_h_ == h
+            && !cached_face_tensor_.empty()) {
+            return cached_face_tensor_;
         }
 
-        // 其他格式
-        cv::Mat rgb;
-        cv::cvtColor(face, rgb, cv::COLOR_BGR2RGB);
-        ncnn::Mat out(w, h, 3);
-        for (int y = 0; y < h; ++y) {
-            for (int x = 0; x < w; ++x) {
-                cv::Vec3b rgb_px = rgb.at<cv::Vec3b>(y, x);
-                out.channel(0).row(y)[x] = static_cast<float>(rgb_px[0]) / 255.0f;
-                out.channel(1).row(y)[x] = static_cast<float>(rgb_px[1]) / 255.0f;
-                out.channel(2).row(y)[x] = static_cast<float>(rgb_px[2]) / 255.0f;
-            }
+        // 转 float [0,1] 并拆通道
+        cv::Mat f32;
+        face.convertTo(f32, CV_32FC3, 1.0 / 255.0);
+        cv::Mat bgr[3];
+        cv::split(f32, bgr);   // bgr[0]=B, [1]=G, [2]=R
+
+        ncnn::Mat out(w, h, 6);
+        const int mask_from = h / 2;   // 下半脸起点（y >= 48 置零）
+        const size_t row_bytes = static_cast<size_t>(w) * sizeof(float);
+
+        for (int c = 0; c < 3; ++c) {
+            const float* src = bgr[2 - c].ptr<float>();   // c=0→R, 1→G, 2→B
+            float* dst_masked = out.channel(c).row(0);
+            float* dst_full   = out.channel(c + 3).row(0);
+            // 上半脸：遮罩通道拷入真实像素
+            std::memcpy(dst_masked, src, row_bytes * mask_from);
+            // 下半脸：遮罩通道置零（ncnn::Mat 非零初始化，必须显式清零）
+            std::memset(dst_masked + static_cast<size_t>(mask_from) * w,
+                        0, row_bytes * (h - mask_from));
+            // 完整人脸：全图拷贝
+            std::memcpy(dst_full, src, row_bytes * h);
         }
+
+        // 写缓存
+        cached_face_tensor_ = out;
+        cached_face_ptr_    = face_in.data;
+        cached_face_w_      = w;
+        cached_face_h_      = h;
         return out;
     }
 
@@ -387,7 +405,7 @@ void InferenceWorker::Run() {
         // ---- 1. 优先处理重试队列 ----
         if (!impl_->retry_queue_.empty()) {
             InferenceTask task = impl_->retry_queue_.front();
-            impl_->retry_queue_.erase(impl_->retry_queue_.begin());
+            impl_->retry_queue_.pop_front();
 
             ncnn::Mat output;
             double latency_ms = 0.0;
@@ -396,10 +414,11 @@ void InferenceWorker::Run() {
             impl_->UpdateStats(latency_ms, ok);
 
             if (ok) {
-                // 成功: 推送到输出队列
+                // 成功: 推送到输出队列（携带人脸数据用于下游融合）
                 InferenceOutputPacket pkt;
                 pkt.InheritHeader(task.mel.header);
-                pkt.payload = output;
+                pkt.payload.model_output = output;
+                pkt.payload.face_data    = task.face.payload;
                 pkt.header.status = StatusCode::OK;
                 pkt.header.cost_ms = latency_ms;
                 impl_->output_queue_->Push(std::move(pkt));
@@ -460,10 +479,11 @@ void InferenceWorker::Run() {
         impl_->UpdateStats(latency_ms, ok);
 
         if (ok) {
-            // 成功
+            // 成功（携带人脸数据用于下游融合流水线）
             InferenceOutputPacket pkt;
             pkt.InheritHeader(task.mel.header);
-            pkt.payload = output;
+            pkt.payload.model_output = output;
+            pkt.payload.face_data    = task.face.payload;
             pkt.header.status = StatusCode::OK;
             pkt.header.cost_ms = latency_ms;
             impl_->output_queue_->Push(std::move(pkt));
@@ -510,7 +530,7 @@ void InferenceWorker::ResetStats() {
 }
 
 void InferenceWorker::MarkInputEOS() {
-    impl_->input_eos_ = true;
+    impl_->input_eos_.store(true, std::memory_order_release);
 }
 
 // ============================================================================

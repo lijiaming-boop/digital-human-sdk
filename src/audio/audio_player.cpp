@@ -4,6 +4,7 @@
 #include <atomic>
 #include <cstring>
 #include <iostream>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -34,22 +35,23 @@ static std::atomic<bool> gPaDeviceReady{false};
 struct AudioPlayer::Impl {
     // ---- 配置 ----
     int    sample_rate        = 48000;
-    int    channels           = 2;
+    std::atomic<int> channels{2};
     int    frames_per_buffer  = 512;
     bool   initialized        = false;
 
     // ---- 音频数据 ----
-    std::vector<float> audio_data;      ///< PCM float 样本数据 (interleaved)
-    int64_t total_frames     = 0;       ///< 总帧数 (每帧 = channels 个样本)
-    bool    data_loaded      = false;
+    using AudioDataPtr = std::shared_ptr<const std::vector<float>>;
+    AudioDataPtr audio_data;                    ///< PCM float 样本数据 (shared_ptr 实现无锁发布)
+    std::atomic<int64_t> total_frames{0};       ///< 总帧数 (每帧 = channels 个样本)
+    std::atomic<bool>    data_loaded{false};    ///< 数据已加载标志
 
     // ---- 播放状态（原子变量，由回调线程和主线程共享） ----
     std::atomic<AudioPlayerState> state{AudioPlayerState::IDLE};
     std::atomic<int64_t>          consumed_frames{0};  ///< 已消耗的帧数
 
-    // ---- 回调侧的读取位置（仅在回调线程中访问） ----
-    int64_t read_frame_pos  = 0;        ///< 回调线程读取位置（帧数）
-    bool    callback_active = false;    ///< 回调是否正在运行
+    // ---- 回调侧的读取位置（主线程与回调线程共享） ----
+    std::atomic<int64_t> read_frame_pos{0}; ///< 回调线程读取位置（帧数）
+    bool    callback_active = false;        ///< 回调是否正在运行（仅主线程访问）
 
     // ---- 时间追踪 ----
     PaStream*       stream             = nullptr;
@@ -96,29 +98,43 @@ struct AudioPlayer::Impl {
 
         AudioPlayerState currentState = impl->state.load(std::memory_order_acquire);
 
+        // 使用原子加载共享变量
+        bool dataLoaded = impl->data_loaded.load(std::memory_order_acquire);
+        int64_t curReadPos = impl->read_frame_pos.load(std::memory_order_relaxed);
+        int64_t totalFrames = impl->total_frames.load(std::memory_order_acquire);
+        int chans = impl->channels.load(std::memory_order_acquire);
+
         // 暂停/停止/空闲/结束 → 输出静音
         if (currentState != AudioPlayerState::PLAYING ||
-            !impl->data_loaded ||
-            impl->read_frame_pos >= impl->total_frames) {
+            !dataLoaded ||
+            curReadPos >= totalFrames) {
 
-            std::memset(out, 0, frameCount * impl->channels * sizeof(float));
+            std::memset(out, 0, frameCount * chans * sizeof(float));
 
             // 标记播放完毕
-            if (impl->data_loaded && impl->read_frame_pos >= impl->total_frames) {
+            if (dataLoaded && curReadPos >= totalFrames) {
                 impl->state.store(AudioPlayerState::FINISHED, std::memory_order_release);
             }
 
             return paContinue;
         }
 
+        // 通过 shared_ptr 获取音频数据的稳定快照（无锁发布）
+        auto audioData = std::atomic_load(&impl->audio_data);
+        if (!audioData || audioData->empty()) {
+            std::memset(out, 0, frameCount * chans * sizeof(float));
+            return paContinue;
+        }
+
         // 计算要写入的样本数
-        int64_t samples_needed  = static_cast<int64_t>(frameCount) * impl->channels;
-        int64_t samples_avail   = impl->audio_data.size() - impl->read_frame_pos * impl->channels;
+        int64_t samples_needed  = static_cast<int64_t>(frameCount) * chans;
+        int64_t frameOffset = curReadPos * chans;
+        int64_t samples_avail   = static_cast<int64_t>(audioData->size()) - frameOffset;
         int64_t samples_to_write = std::min(samples_needed, samples_avail);
 
         if (samples_to_write > 0) {
             std::memcpy(out,
-                        impl->audio_data.data() + impl->read_frame_pos * impl->channels,
+                        audioData->data() + frameOffset,
                         samples_to_write * sizeof(float));
         }
 
@@ -129,14 +145,13 @@ struct AudioPlayer::Impl {
         }
 
         // 更新读取位置（帧数）
-        int64_t frames_written = samples_to_write / impl->channels;
-        impl->read_frame_pos += frames_written;
-        impl->consumed_frames.store(
-            impl->read_frame_pos,
-            std::memory_order_release);
+        int64_t frames_written = samples_to_write / chans;
+        int64_t newReadPos = curReadPos + frames_written;
+        impl->read_frame_pos.store(newReadPos, std::memory_order_release);
+        impl->consumed_frames.store(newReadPos, std::memory_order_release);
 
         // 如果所有数据均已消耗
-        if (impl->read_frame_pos >= impl->total_frames) {
+        if (newReadPos >= totalFrames) {
             impl->state.store(AudioPlayerState::FINISHED, std::memory_order_release);
         }
 
@@ -232,7 +247,7 @@ bool AudioPlayer::Init(int sampleRate, int channels, int framesPerBuffer) {
 
     // 保存配置
     impl_->sample_rate       = sampleRate;
-    impl_->channels          = channels;
+    impl_->channels.store(channels, std::memory_order_release);
     impl_->frames_per_buffer = framesPerBuffer;
 
     // 打开默认输出流
@@ -304,10 +319,10 @@ void AudioPlayer::Destroy() {
 
     impl_->state.store(AudioPlayerState::IDLE, std::memory_order_release);
     impl_->consumed_frames.store(0, std::memory_order_release);
-    impl_->read_frame_pos     = 0;
-    impl_->total_frames       = 0;
-    impl_->data_loaded        = false;
-    impl_->audio_data.clear();
+    impl_->read_frame_pos.store(0, std::memory_order_release);
+    impl_->total_frames.store(0, std::memory_order_release);
+    impl_->data_loaded.store(false, std::memory_order_release);
+    std::atomic_store(&impl_->audio_data, Impl::AudioDataPtr{});
     impl_->total_paused_duration.store(0.0, std::memory_order_release);
     impl_->last_dac_time.store(0.0, std::memory_order_release);
     impl_->stream_start_time  = 0.0;
@@ -332,19 +347,21 @@ bool AudioPlayer::LoadAudio(const float* samples, int numSamples, int channels) 
         impl_->setError("LoadAudio: 参数无效");
         return false;
     }
-    if (channels != impl_->channels) {
+    if (channels != impl_->channels.load(std::memory_order_acquire)) {
         impl_->setError("LoadAudio: 声道数不匹配，需要 " +
-                        std::to_string(impl_->channels) + "，传入 " +
+                        std::to_string(impl_->channels.load(std::memory_order_acquire)) + "，传入 " +
                         std::to_string(channels));
         return false;
     }
 
-    impl_->audio_data.assign(samples, samples + numSamples);
-    impl_->total_frames = numSamples / channels;
-    impl_->data_loaded  = true;
+    // 使用 shared_ptr 发布新的音频数据（无锁，回调线程通过 atomic_load 获取）
+    auto new_data = std::make_shared<const std::vector<float>>(samples, samples + numSamples);
+    std::atomic_store(&impl_->audio_data, new_data);
+    impl_->total_frames.store(numSamples / channels, std::memory_order_release);
+    impl_->data_loaded.store(true, std::memory_order_release);
 
     // 重置播放位置
-    impl_->read_frame_pos      = 0;
+    impl_->read_frame_pos.store(0, std::memory_order_release);
     impl_->consumed_frames.store(0, std::memory_order_release);
     impl_->state.store(AudioPlayerState::STOPPED, std::memory_order_release);
 
@@ -378,7 +395,7 @@ bool AudioPlayer::Play() {
     if (curState == AudioPlayerState::STOPPED ||
         curState == AudioPlayerState::IDLE ||
         curState == AudioPlayerState::FINISHED) {
-        impl_->read_frame_pos = 0;
+        impl_->read_frame_pos.store(0, std::memory_order_release);
         impl_->consumed_frames.store(0, std::memory_order_release);
         impl_->total_paused_duration.store(0.0, std::memory_order_release);
     }
@@ -436,12 +453,18 @@ bool AudioPlayer::Resume() {
         return false;
     }
 
-    // 记录暂停时长
+    // 记录暂停时长（使用 CAS 循环原子累加，避免非原子 RMW 数据竞争）
+    // 注意：C++17 的 atomic<double> 不提供 fetch_add，使用 compare_exchange 实现原子累加
     PaTime now = Pa_GetStreamTime(impl_->stream);
     double pauseDuration = now - impl_->pause_start_time;
-    impl_->total_paused_duration.store(
-        impl_->total_paused_duration.load(std::memory_order_acquire) + pauseDuration,
-        std::memory_order_release);
+    {
+        double expected = impl_->total_paused_duration.load(std::memory_order_relaxed);
+        double desired;
+        do {
+            desired = expected + pauseDuration;
+        } while (!impl_->total_paused_duration.compare_exchange_weak(
+            expected, desired, std::memory_order_release, std::memory_order_relaxed));
+    }
 
     impl_->state.store(AudioPlayerState::PLAYING, std::memory_order_release);
     impl_->stream_start_time = now;
@@ -480,7 +503,7 @@ bool AudioPlayer::Stop() {
     }
 
     // 重置位置到开头
-    impl_->read_frame_pos = 0;
+    impl_->read_frame_pos.store(0, std::memory_order_release);
     impl_->consumed_frames.store(0, std::memory_order_release);
     impl_->total_paused_duration.store(0.0, std::memory_order_release);
     impl_->last_dac_time.store(0.0, std::memory_order_release);
@@ -555,15 +578,15 @@ int AudioPlayer::GetSampleRate() const {
 }
 
 int AudioPlayer::GetChannels() const {
-    return impl_->channels;
+    return impl_->channels.load(std::memory_order_acquire);
 }
 
 // ============================================================================
 // 错误处理
 // ============================================================================
 
-const char* AudioPlayer::GetLastErrorMsg() const {
-    return impl_->last_error_msg.c_str();
+std::string AudioPlayer::GetLastErrorMsg() const {
+    return impl_->last_error_msg;
 }
 
 }  // namespace audio

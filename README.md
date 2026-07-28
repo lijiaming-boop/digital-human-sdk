@@ -328,7 +328,7 @@ FaceDetector detector;
 auto faces = detector.detect(image);
 
 // 对齐
-FaceAlignigner aligner;
+FaceAligner aligner;
 auto result = aligner.alignByRect(image, landmarks, 96, faces[0]);
 
 // 遮罩

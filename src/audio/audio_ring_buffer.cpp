@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <algorithm>
 #include <cstring>
+#include <iostream>
 
 namespace digital_human {
 namespace audio {
@@ -16,10 +17,14 @@ struct RingBuffer::Impl {
     alignas(64) std::atomic<uint64_t> readIdx;
 
     explicit Impl(size_t cap)
-        : capacity(cap)
-        , buffer(std::make_unique<float[]>(cap))
+        : capacity(cap > 0 ? cap : 1)
+        , buffer(std::make_unique<float[]>(cap > 0 ? cap : 1))
         , writeIdx(0)
-        , readIdx(0) {}
+        , readIdx(0) {
+        if (cap == 0) {
+            std::cerr << "[RingBuffer] 警告: capacity=0 被强制为 1" << std::endl;
+        }
+    }
 
     size_t write(const float* data, size_t count) {
         size_t avail = availableWrite();

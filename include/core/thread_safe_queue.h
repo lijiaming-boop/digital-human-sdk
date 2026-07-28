@@ -91,14 +91,55 @@ public:
     /// @brief 允许移动构造（不推荐并发时使用）
     ThreadSafeQueue(ThreadSafeQueue&& other) noexcept {
         std::lock_guard<std::mutex> lock(other.mutex_);
-        queue_               = std::move(other.queue_);
+        queue_                 = std::move(other.queue_);
         stopped_.store(other.stopped_.load(std::memory_order_relaxed),
                         std::memory_order_relaxed);
-        max_capacity_        = other.max_capacity_;
-        name_                = std::move(other.name_);
-        heartbeat_timeout_ms_ = other.heartbeat_timeout_ms_;
+        max_capacity_          = other.max_capacity_;
+        name_                  = std::move(other.name_);
+        heartbeat_timeout_ms_  = other.heartbeat_timeout_ms_;
+        peak_size_.store(other.peak_size_.load(std::memory_order_relaxed),
+                          std::memory_order_relaxed);
+        total_overflows_.store(other.total_overflows_.load(std::memory_order_relaxed),
+                                std::memory_order_relaxed);
         total_pushes_.store(other.total_pushes_.load(std::memory_order_relaxed));
         total_pops_.store(other.total_pops_.load(std::memory_order_relaxed));
+        last_push_time_.store(other.last_push_time_.load(std::memory_order_relaxed),
+                               std::memory_order_relaxed);
+        last_pop_time_.store(other.last_pop_time_.load(std::memory_order_relaxed),
+                              std::memory_order_relaxed);
+        last_heartbeat_.store(other.last_heartbeat_.load(std::memory_order_relaxed),
+                               std::memory_order_relaxed);
+    }
+
+    /// @brief 移动赋值（不推荐并发时使用）
+    ThreadSafeQueue& operator=(ThreadSafeQueue&& other) noexcept {
+        if (this == &other) return *this;
+        // 先停止当前队列
+        Stop();
+        std::lock(mutex_, other.mutex_);
+        std::lock_guard<std::mutex> lk1(mutex_, std::adopt_lock);
+        std::lock_guard<std::mutex> lk2(other.mutex_, std::adopt_lock);
+        queue_                 = std::move(other.queue_);
+        stopped_.store(other.stopped_.load(std::memory_order_relaxed),
+                        std::memory_order_relaxed);
+        max_capacity_          = other.max_capacity_;
+        name_                  = std::move(other.name_);
+        heartbeat_timeout_ms_  = other.heartbeat_timeout_ms_;
+        peak_size_.store(other.peak_size_.load(std::memory_order_relaxed),
+                          std::memory_order_relaxed);
+        total_overflows_.store(other.total_overflows_.load(std::memory_order_relaxed),
+                                std::memory_order_relaxed);
+        total_pushes_.store(other.total_pushes_.load(std::memory_order_relaxed));
+        total_pops_.store(other.total_pops_.load(std::memory_order_relaxed));
+        last_push_time_.store(other.last_push_time_.load(std::memory_order_relaxed),
+                               std::memory_order_relaxed);
+        last_pop_time_.store(other.last_pop_time_.load(std::memory_order_relaxed),
+                              std::memory_order_relaxed);
+        last_heartbeat_.store(other.last_heartbeat_.load(std::memory_order_relaxed),
+                               std::memory_order_relaxed);
+        other.not_empty_cv_.notify_all();
+        other.not_full_cv_.notify_all();
+        return *this;
     }
 
     // ========================================================================

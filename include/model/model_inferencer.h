@@ -16,6 +16,10 @@ namespace model {
  * 关键特性：
  * - ncnn::Net 在 Init 时一次性加载，整个生命周期复用，避免频繁创建销毁
  * - ncnn::Extractor 每次 Infer 时创建（轻量级，可多次创建）
+ * - ncnn thread options are fixed before model load; changing thread count
+ *   after Init reloads the model and must not race with Infer.
+ * - OpenMP defaults to passive waiting unless the process already configured it.
+
  * - Init 时自动运行 benchmark，遍历线程数 [1, 2, 4, 8, 16] 选最优
  * - 若 CPU 最佳延迟仍 > target_latency_ms 且 ncnn 有 Vulkan 支持，自动启用 GPU
  * - 内置性能计数器（总推理次数、平均/最大/最小延迟）

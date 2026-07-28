@@ -49,17 +49,18 @@ static int gFailed = 0;
     } while (0)
 
 // ============================================================================
-// 辅助：构造有效 RenderPacket
+// 辅助：构造有效 InferenceOutputPacket
 // ============================================================================
-static RenderPacket makeRenderPacket(int64_t pts = 0, int64_t seq = 0) {
-    RenderTaskData data;
-    data.model_output   = ncnn::Mat(448, 96, 3);
+static InferenceOutputPacket makeInferPacket(int64_t pts = 0, int64_t seq = 0) {
+    InferenceOutputData data;
+    data.model_output    = ncnn::Mat(448, 96, 3);
     data.model_output.fill(0.0f);
-    data.original_face  = cv::Mat(480, 640, CV_8UC3, cv::Scalar(100, 100, 100));
-    data.M_inv          = cv::Mat::eye(2, 3, CV_32F);
-    data.face_mask      = cv::Mat(480, 640, CV_32FC1, cv::Scalar(0.5f));
+    data.face_data.aligned_face  = cv::Mat(96, 96, CV_8UC3, cv::Scalar(100, 100, 100));
+    data.face_data.original_face = cv::Mat(480, 640, CV_8UC3, cv::Scalar(100, 100, 100));
+    data.face_data.M_inv         = cv::Mat::eye(2, 3, CV_32F);
+    data.face_data.face_mask     = cv::Mat(480, 640, CV_32FC1, cv::Scalar(0.5f));
 
-    auto pkt = RenderPacket::Make(std::move(data), pts, seq);
+    auto pkt = InferenceOutputPacket::Make(std::move(data), pts, seq);
     return pkt;
 }
 
@@ -95,13 +96,13 @@ static void testTaskData() {
 static void testPacket() {
     TEST_NAME("Test 2: RenderPacket 操作");
 
-    auto pkt = makeRenderPacket(100, 1);
+    auto pkt = makeInferPacket(100, 1);
     TEST_CHECK(pkt.header.IsOK(), "2.1 默认 OK");
     TEST_CHECK(pkt.header.pts_ms == 100, "2.2 pts=100");
     TEST_CHECK(pkt.header.seq_id == 1, "2.3 seq=1");
     TEST_CHECK(pkt.payload.IsValid(), "2.4 payload 有效");
 
-    auto eos = RenderPacket::EOS();
+    auto eos = InferenceOutputPacket::EOS();
     TEST_CHECK(eos.header.IsEOS(), "2.5 EOS OK");
 }
 
@@ -111,7 +112,7 @@ static void testPacket() {
 static void testLifecycle() {
     TEST_NAME("Test 3: 基本生命周期");
 
-    ThreadSafeQueue<RenderPacket> input_queue;
+    ThreadSafeQueue<InferenceOutputPacket> input_queue;
 
     RenderThread thread;
     RenderConfig cfg;
@@ -136,7 +137,7 @@ static void testLifecycle() {
 static void testSingleFrame() {
     TEST_NAME("Test 4: 单帧渲染");
 
-    ThreadSafeQueue<RenderPacket> input_queue;
+    ThreadSafeQueue<InferenceOutputPacket> input_queue;
     ThreadSafeQueue<OutputFramePacket> output_queue;
 
     RenderThread thread;
@@ -149,8 +150,8 @@ static void testSingleFrame() {
     thread.SetOutputQueue(&output_queue);
 
     thread.Start();
-    input_queue.Push(makeRenderPacket(0, 0));
-    input_queue.Push(RenderPacket::EOS());
+    input_queue.Push(makeInferPacket(0, 0));
+    input_queue.Push(InferenceOutputPacket::EOS());
 
     // 等待输出帧
     OutputFramePacket out;
@@ -172,7 +173,7 @@ static void testSingleFrame() {
 static void testMultiFrame() {
     TEST_NAME("Test 5: 多帧渲染计数");
 
-    ThreadSafeQueue<RenderPacket> input_queue;
+    ThreadSafeQueue<InferenceOutputPacket> input_queue;
     ThreadSafeQueue<OutputFramePacket> output_queue;
 
     RenderThread thread;
@@ -186,9 +187,9 @@ static void testMultiFrame() {
 
     thread.Start();
     for (int i = 0; i < 10; ++i) {
-        input_queue.Push(makeRenderPacket(i * 40, i));
+        input_queue.Push(makeInferPacket(i * 40, i));
     }
-    input_queue.Push(RenderPacket::EOS());
+    input_queue.Push(InferenceOutputPacket::EOS());
 
     // 等待所有输出帧
     int count = 0;
@@ -211,7 +212,7 @@ static void testMultiFrame() {
 static void testFrameCallback() {
     TEST_NAME("Test 6: 帧回调");
 
-    ThreadSafeQueue<RenderPacket> input_queue;
+    ThreadSafeQueue<InferenceOutputPacket> input_queue;
     std::atomic<int> callback_count{0};
 
     RenderThread thread;
@@ -226,9 +227,9 @@ static void testFrameCallback() {
     });
 
     thread.Start();
-    input_queue.Push(makeRenderPacket(0, 0));
-    input_queue.Push(makeRenderPacket(40, 1));
-    input_queue.Push(RenderPacket::EOS());
+    input_queue.Push(makeInferPacket(0, 0));
+    input_queue.Push(makeInferPacket(40, 1));
+    input_queue.Push(InferenceOutputPacket::EOS());
     std::this_thread::sleep_for(std::chrono::milliseconds(300));
     thread.Wait();
 
@@ -242,7 +243,7 @@ static void testFrameCallback() {
 static void testSyncDecisions() {
     TEST_NAME("Test 7: 同步决策（无音频设备时全 DISPLAY）");
 
-    ThreadSafeQueue<RenderPacket> input_queue;
+    ThreadSafeQueue<InferenceOutputPacket> input_queue;
     ThreadSafeQueue<OutputFramePacket> output_queue;
 
     RenderThread thread;
@@ -256,9 +257,9 @@ static void testSyncDecisions() {
 
     thread.Start();
     for (int i = 0; i < 5; ++i) {
-        input_queue.Push(makeRenderPacket(i * 40, i));
+        input_queue.Push(makeInferPacket(i * 40, i));
     }
-    input_queue.Push(RenderPacket::EOS());
+    input_queue.Push(InferenceOutputPacket::EOS());
 
     int count = 0;
     OutputFramePacket out;
@@ -278,7 +279,7 @@ static void testSyncDecisions() {
 static void testMetrics() {
     TEST_NAME("Test 8: 统计指标");
 
-    ThreadSafeQueue<RenderPacket> input_queue;
+    ThreadSafeQueue<InferenceOutputPacket> input_queue;
     ThreadSafeQueue<OutputFramePacket> output_queue;
 
     RenderThread thread;
@@ -296,9 +297,9 @@ static void testMetrics() {
 
     thread.Start();
     for (int i = 0; i < 7; ++i) {
-        input_queue.Push(makeRenderPacket(i * 40, i));
+        input_queue.Push(makeInferPacket(i * 40, i));
     }
-    input_queue.Push(RenderPacket::EOS());
+    input_queue.Push(InferenceOutputPacket::EOS());
 
     // 等待消费
     OutputFramePacket out;
@@ -323,7 +324,7 @@ static void testMetrics() {
 static void testBulkFrames() {
     TEST_NAME("Test 9: 大量帧压力测试 (100帧)");
 
-    ThreadSafeQueue<RenderPacket> input_queue;
+    ThreadSafeQueue<InferenceOutputPacket> input_queue;
     ThreadSafeQueue<OutputFramePacket> output_queue;
 
     RenderThread thread;
@@ -337,9 +338,9 @@ static void testBulkFrames() {
 
     thread.Start();
     for (int i = 0; i < 100; ++i) {
-        input_queue.Push(makeRenderPacket(i * 40, i));
+        input_queue.Push(makeInferPacket(i * 40, i));
     }
-    input_queue.Push(RenderPacket::EOS());
+    input_queue.Push(InferenceOutputPacket::EOS());
 
     int count = 0;
     OutputFramePacket out;
@@ -366,7 +367,7 @@ static void testBulkFrames() {
 static void testGracefulShutdown() {
     TEST_NAME("Test 10: 优雅退出 — 排空队列");
 
-    ThreadSafeQueue<RenderPacket> input_queue;
+    ThreadSafeQueue<InferenceOutputPacket> input_queue;
     ThreadSafeQueue<OutputFramePacket> output_queue;
 
     RenderThread thread;
@@ -383,9 +384,9 @@ static void testGracefulShutdown() {
 
     // 先入队帧，再发 EOS → 线程自然退出
     for (int i = 0; i < 5; ++i) {
-        input_queue.Push(makeRenderPacket(i * 40, i));
+        input_queue.Push(makeInferPacket(i * 40, i));
     }
-    input_queue.Push(RenderPacket::EOS());
+    input_queue.Push(InferenceOutputPacket::EOS());
 
     // 等待线程自然退出（不要调用 Shutdown，EOS 会驱动退出）
     std::this_thread::sleep_for(std::chrono::milliseconds(300));
@@ -406,7 +407,7 @@ static void testGracefulShutdown() {
 static void testFramePacing() {
     TEST_NAME("Test 11: 帧间隔调节");
 
-    ThreadSafeQueue<RenderPacket> input_queue;
+    ThreadSafeQueue<InferenceOutputPacket> input_queue;
 
     RenderThread thread;
     RenderConfig cfg;
@@ -422,9 +423,9 @@ static void testFramePacing() {
     // 发送 5 帧
     auto t0 = std::chrono::steady_clock::now();
     for (int i = 0; i < 5; ++i) {
-        input_queue.Push(makeRenderPacket(i * 10, i));
+        input_queue.Push(makeInferPacket(i * 10, i));
     }
-    input_queue.Push(RenderPacket::EOS());
+    input_queue.Push(InferenceOutputPacket::EOS());
     thread.Wait();
     auto elapsed = std::chrono::duration<double, std::milli>(
         std::chrono::steady_clock::now() - t0).count();

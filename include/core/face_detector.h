@@ -6,7 +6,7 @@
 #include<filesystem>
 #include <opencv2/opencv.hpp>
 
-namespace DigitalHuman{
+namespace digital_human{
     namespace core{
         class FaceDetector{
         public:
@@ -24,8 +24,8 @@ namespace DigitalHuman{
 
             
         private:
-            struct FaceDetectorImpl;
-            std::unique_ptr<FaceDetectorImpl> impl_;
+            struct Impl;
+            std::unique_ptr<Impl> impl_;
         };
     }
 }

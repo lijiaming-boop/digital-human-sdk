@@ -6,13 +6,13 @@
 namespace digital_human {
 namespace core {
 
-struct FaceAlignigner::FaceAlignignerImpl {
-    FaceAlignignerImpl() = default;
-    ~FaceAlignignerImpl() = default;
-    FaceAlignignerImpl(FaceAlignignerImpl&&) = default;
-    FaceAlignignerImpl& operator=(FaceAlignignerImpl&&) = default;
-    FaceAlignignerImpl(const FaceAlignignerImpl&) = delete;
-    FaceAlignignerImpl& operator=(const FaceAlignignerImpl&) = delete;
+struct FaceAligner::Impl {
+    Impl() = default;
+    ~Impl() = default;
+    Impl(Impl&&) = default;
+    Impl& operator=(Impl&&) = default;
+    Impl(const Impl&) = delete;
+    Impl& operator=(const Impl&) = delete;
 
     cv::Point2f getCenter(const std::vector<cv::Point>& points) {
         cv::Point2f center(0.0f, 0.0f);
@@ -54,6 +54,12 @@ struct FaceAlignigner::FaceAlignignerImpl {
         double current_dist =
             sqrt(pow(right_eye_center.x - left_eye_center.x, 2) +
                  pow(right_eye_center.y - left_eye_center.y, 2));
+        // 防除零：两眼重合时无法计算仿射变换
+        if (current_dist < 1e-6) {
+            std::cerr << "alignByEyes: 两眼重合，无法对齐" << std::endl;
+            cv::Mat empty;
+            return empty;
+        }
         double scale = desired_dist / current_dist;
 
         cv::Point2f center((left_eye_center.x + right_eye_center.x) / 2.0f,
@@ -122,6 +128,12 @@ struct FaceAlignigner::FaceAlignignerImpl {
         double current_dist =
             sqrt(pow(right_eye_center.x - left_eye_center.x, 2) +
                  pow(right_eye_center.y - left_eye_center.y, 2));
+        // 防除零：两眼重合时无法计算仿射变换
+        if (current_dist < 1e-6) {
+            std::cerr << "alignByRect: 两眼重合，无法对齐" << std::endl;
+            result.valid = false;
+            return result;
+        }
         double scale = desired_dist / current_dist;
 
         cv::Point2f center((left_eye_center.x + right_eye_center.x) / 2.0f,
@@ -172,28 +184,28 @@ struct FaceAlignigner::FaceAlignignerImpl {
     }
 };
 
-FaceAlignigner::FaceAlignigner()
-    : impl_(std::make_unique<FaceAlignignerImpl>()) {}
+FaceAligner::FaceAligner()
+    : impl_(std::make_unique<Impl>()) {}
 
-FaceAlignigner::~FaceAlignigner() = default;
+FaceAligner::~FaceAligner() = default;
 
-FaceAlignigner::FaceAlignigner(FaceAlignigner&&) noexcept = default;
+FaceAligner::FaceAligner(FaceAligner&&) noexcept = default;
 
-FaceAlignigner& FaceAlignigner::operator=(FaceAlignigner&&) noexcept = default;
+FaceAligner& FaceAligner::operator=(FaceAligner&&) noexcept = default;
 
-cv::Mat FaceAlignigner::align(const cv::Mat& image,
+cv::Mat FaceAligner::align(const cv::Mat& image,
                               const std::vector<cv::Point2f>& landmarks,
                               int face_size) {
     return impl_->alignByEyes(image, landmarks, face_size);
 }
 
-FaceAlignerResult FaceAlignigner::alignByRect(
+FaceAlignerResult FaceAligner::alignByRect(
     const cv::Mat& image, const std::vector<cv::Point2f>& landmarks,
     int face_size, const cv::Rect& face_rect, double ratio) {
     return impl_->alignByRect(image, landmarks, face_size, face_rect, ratio);
 }
 
-std::vector<cv::Point2f> FaceAlignigner::transform_landmarks(
+std::vector<cv::Point2f> FaceAligner::transform_landmarks(
     const std::vector<cv::Point2f>& landmarks, const cv::Mat& M) const {
     std::vector<cv::Point2f> result;
     result.reserve(landmarks.size());
