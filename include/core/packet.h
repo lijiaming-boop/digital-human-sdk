@@ -3,7 +3,12 @@
 #include <cstdint>
 #include <string>
 #include <opencv2/core.hpp>
-#include <ncnn/mat.h>
+#include <mat.h>
+
+// WinBase.h defines ERROR as a macro. Keep the public enum spelling stable.
+#ifdef ERROR
+#undef ERROR
+#endif
 
 namespace digital_human {
 namespace core {

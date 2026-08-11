@@ -80,7 +80,7 @@ int main(int argc, char** argv) {
     if (argc >= 3) {
         model_path = argv[2];
     } else {
-        model_path = resolvePath("models/shape_predictor_68_face_landmarks.dat");
+        model_path = resolvePath("models/face");
     }
 
     std::cout << "Image:  " << image_path << std::endl;

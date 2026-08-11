@@ -36,7 +36,7 @@ struct VideoProcessor::Impl {
     FaceAligner     face_aligner;
     FaceMaskGenerator face_mask_gen;
 
-    // ---- dlib 模型路径 ----
+    // ---- SCRFD + 2D106 模型目录 ----
     std::string landmark_model_path;
 
     // ---- 状态 ----
@@ -45,7 +45,7 @@ struct VideoProcessor::Impl {
 
     // ---- 静态人脸缓存（拟合图片/视频用例：同一张人脸重复使用） ----
     // 命中条件：图像尺寸一致 + 像素指纹一致（首末行采样）
-    // 命中后跳过 dlib 检测/对齐/mask 生成，复用上次的
+    // 命中后跳过人脸检测/对齐/mask 生成，复用上次的
     // aligned_face / M_inv / face_mask / face_rect / landmarks_96
     struct FaceCache {
         cv::Size                  frame_size{0, 0};
@@ -109,7 +109,7 @@ struct VideoProcessor::Impl {
         try {
             const cv::Mat& frame = pkt.payload;
 
-            // 1. 查缓存：若指纹一致，跳过完整 dlib 流水线
+            // 1. 查缓存：若指纹一致，跳过完整人脸流水线
             //    (拟合图片场景：同一张脸 ×N 帧音频 → 100% 命中)
             auto sig = ComputeSignature(frame);
             if (face_cache_.valid &&
@@ -278,7 +278,7 @@ void VideoProcessor::Run() {
         return;
     }
 
-    // 加载 dlib 人脸关键点模型（支持按需加载）
+    // 加载 SCRFD + 2D106 人脸模型（支持按需加载）
     if (!impl_->landmark_model_path.empty()) {
         if (impl_->face_detector.loadModel(impl_->landmark_model_path)) {
             impl_->LogInfo("人脸关键点模型已加载: " + impl_->landmark_model_path);

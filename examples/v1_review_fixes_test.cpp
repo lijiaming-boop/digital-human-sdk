@@ -179,7 +179,7 @@ static std::vector<float> generateSine(float freq_hz, int sample_rate,
     int total = static_cast<int>(sample_rate * duration_sec);
     std::vector<float> data(total);
     for (int i = 0; i < total; ++i) {
-        data[i] = 0.5f * std::sin(2.0f * static_cast<float>(M_PI)
+        data[i] = 0.5f * std::sin(2.0f * 3.14159265358979323846f
                  * freq_hz * i / sample_rate);
     }
     return data;

@@ -11,7 +11,8 @@
 #include <thread>
 #include <vector>
 
-#include <ncnn/net.h>
+#include <gpu.h>
+#include <net.h>
 
 namespace {
 
@@ -34,6 +35,55 @@ void ConfigureOpenMPPassiveWait() {
 #endif
     }
 }
+
+#if NCNN_VULKAN
+// ncnn 的 Vulkan instance 是进程级对象。多个 ModelInferencer 可以并存，
+// 因此以引用计数管理它，避免一个实例析构时破坏另一个实例正在使用的 GPU。
+std::mutex g_vulkan_instance_mutex;
+int g_vulkan_instance_users = 0;
+
+bool AcquireVulkanInstance(int& device_index, int& device_count,
+                           std::string& failure_reason) {
+    std::lock_guard<std::mutex> lock(g_vulkan_instance_mutex);
+
+    if (g_vulkan_instance_users == 0) {
+        const int ret = ncnn::create_gpu_instance();
+        if (ret != 0) {
+            failure_reason = "create_gpu_instance failed (ret="
+                           + std::to_string(ret) + ")";
+            std::cerr << "[ModelInferencer] " << failure_reason << std::endl;
+            return false;
+        }
+    }
+
+    const int gpu_count = ncnn::get_gpu_count();
+    device_count = gpu_count;
+    if (gpu_count <= 0) {
+        failure_reason = "Vulkan is compiled in, but no usable physical GPU was found";
+        std::cerr << "[ModelInferencer] " << failure_reason << std::endl;
+        if (g_vulkan_instance_users == 0) {
+            ncnn::destroy_gpu_instance();
+        }
+        return false;
+    }
+
+    device_index = ncnn::get_default_gpu_index();
+    ++g_vulkan_instance_users;
+    return true;
+}
+
+void ReleaseVulkanInstance() {
+    std::lock_guard<std::mutex> lock(g_vulkan_instance_mutex);
+    if (g_vulkan_instance_users <= 0) {
+        return;
+    }
+
+    --g_vulkan_instance_users;
+    if (g_vulkan_instance_users == 0) {
+        ncnn::destroy_gpu_instance();
+    }
+}
+#endif
 
 }  // namespace
 
@@ -66,6 +116,7 @@ struct ModelInferencer::Impl {
     int   num_threads      = 2;      ///< CPU 线程数（autoTune 后确定）
     bool  use_gpu          = true;   ///< 是否启用 Vulkan GPU 加速
     float target_latency_ms = 50.0f; ///< 目标推理延迟阈值（毫秒）
+    VulkanStatus vulkan_status;
 
     // ---- 模型 IO blob 名称（与 Wav2Lip-SD-GAN-opt.param 一致） ----
     static constexpr const char* kAudioInput = "audio_sequences";
@@ -100,27 +151,114 @@ struct ModelInferencer::Impl {
     std::string param_path;
     std::string bin_path;
 
-    bool loadNet(int threads, bool gpu) {
-#if !NCNN_VULKAN
-        if (gpu) {
-            std::cerr << "[ModelInferencer] ncnn was built without Vulkan support" << std::endl;
-            return false;
+#if NCNN_VULKAN
+    bool gpu_instance_acquired = false;
+    int  gpu_device_index = -1;
+#endif
+
+    ~Impl() {
+        // GPU 网络必须先销毁，才能销毁它依赖的进程级 Vulkan instance。
+        net.clear();
+        ReleaseVulkan();
+    }
+
+    void ReleaseVulkan() {
+#if NCNN_VULKAN
+        if (gpu_instance_acquired) {
+            ReleaseVulkanInstance();
+            gpu_instance_acquired = false;
+            gpu_device_index = -1;
         }
 #endif
+    }
+
+    bool EnsureVulkan() {
+#if NCNN_VULKAN
+        if (gpu_instance_acquired) {
+            return true;
+        }
+        vulkan_status.compiled = true;
+        std::string failure_reason;
+        int device_count = 0;
+        if (!AcquireVulkanInstance(gpu_device_index, device_count, failure_reason)) {
+            vulkan_status.available = false;
+            vulkan_status.enabled = false;
+            vulkan_status.device_count = device_count;
+            vulkan_status.device_index = -1;
+            vulkan_status.message = failure_reason;
+            return false;
+        }
+        gpu_instance_acquired = true;
+        vulkan_status.device_count = device_count;
+        vulkan_status.device_index = gpu_device_index;
+        vulkan_status.message = "Vulkan device enumerated; real inference pending";
+        return true;
+#else
+        vulkan_status.compiled = false;
+        vulkan_status.available = false;
+        vulkan_status.enabled = false;
+        vulkan_status.message = "ncnn was built without Vulkan support";
+        std::cerr << "[ModelInferencer] " << vulkan_status.message << std::endl;
+        return false;
+#endif
+    }
+
+    bool loadNet(int threads, bool gpu) {
+        if (gpu && !EnsureVulkan()) {
+            return false;
+        }
+
+        // CPU 回退前先释放 GPU 网络和 instance，确保不会留下仅修改 option
+        // 但没有真正运行 GPU pipeline 的半初始化状态。
+#if NCNN_VULKAN
+        if (!gpu && gpu_instance_acquired) {
+            net.clear();
+            ReleaseVulkan();
+        }
+#endif
+
         net.clear();
         // Winograd/GEMM pipeline construction happens in load_param/load_model.
         // These options therefore must be assigned before either load call.
         net.opt.num_threads = gpu ? 1 : threads;
         net.opt.use_vulkan_compute = gpu;
+#if NCNN_VULKAN
+        if (gpu) {
+            net.set_vulkan_device(gpu_device_index);
+        }
+#endif
 
         if (net.load_param(param_path.c_str()) != 0) {
             std::cerr << "[ModelInferencer] ?? param ??: "
                       << param_path << std::endl;
+            net.clear();
+            if (gpu) ReleaseVulkan();
             return false;
         }
         if (net.load_model(bin_path.c_str()) != 0) {
             std::cerr << "[ModelInferencer] ?? bin ??: "
                       << bin_path << std::endl;
+            net.clear();
+            if (gpu) ReleaseVulkan();
+            return false;
+        }
+        return true;
+    }
+
+    bool WarmupCurrentNet() {
+        ncnn::Mat audio_in(kAudioW, kAudioH, kAudioC);
+        ncnn::Mat face_in(kFaceW, kFaceH, kFaceC);
+        audio_in.fill(0.0f);
+        face_in.fill(0.0f);
+
+        ncnn::Extractor ex = net.create_extractor();
+        ex.input(kAudioInput, audio_in);
+        ex.input(kFaceInput, face_in);
+        ncnn::Mat warmup_out;
+        const int ret = ex.extract(kOutputName, warmup_out);
+        if (ret != 0 || warmup_out.empty()) {
+            std::cerr << "[ModelInferencer] warmup inference failed (ret=" << ret
+                      << ", output_empty=" << warmup_out.empty() << ")" << std::endl;
             return false;
         }
         return true;
@@ -141,6 +279,11 @@ struct ModelInferencer::Impl {
         // ---- 加载模型 ----
         this->param_path = param_path;
         this->bin_path = bin_path;
+#if NCNN_VULKAN
+        vulkan_status.compiled = true;
+#else
+        vulkan_status.compiled = false;
+#endif
         // This must run before the first OpenMP parallel region.
         ConfigureOpenMPPassiveWait();
         // Select Vulkan pipelines before loading the model; fall back on CPU.
@@ -165,8 +308,11 @@ struct ModelInferencer::Impl {
         ex.input(kFaceInput, face_in);
         ncnn::Mat warmup_out;
         int ret = ex.extract(kOutputName, warmup_out);
-        if (ret != 0 && use_gpu) {
+        if ((ret != 0 || warmup_out.empty()) && use_gpu) {
             std::cerr << "[ModelInferencer] GPU warmup failed; falling back to CPU" << std::endl;
+            vulkan_status.available = false;
+            vulkan_status.enabled = false;
+            vulkan_status.message = "Vulkan model warmup failed; CPU fallback selected";
             if (loadNet(num_threads, false)) {
                 use_gpu = false;
                 ncnn::Extractor cpu_ex = net.create_extractor();
@@ -175,11 +321,22 @@ struct ModelInferencer::Impl {
                 ret = cpu_ex.extract(kOutputName, warmup_out);
             }
         }
-        if (ret != 0) {
+        if (ret != 0 || warmup_out.empty()) {
             std::cerr << "[ModelInferencer] warmup 推理失败 (ret="
                       << ret << ")，模型可能不兼容" << std::endl;
             return false;
         }
+
+#if NCNN_VULKAN
+        if (use_gpu) {
+            vulkan_status.available = true;
+            vulkan_status.enabled = true;
+            vulkan_status.message = "Vulkan device passed real Wav2Lip warmup inference";
+            std::cout << "[ModelInferencer] Vulkan GPU enabled (device="
+                      << gpu_device_index << ", total_devices="
+                      << ncnn::get_gpu_count() << ")" << std::endl;
+        }
+#endif
 
         // ---- 自动调优 ----
         // Runtime-only thread tuning is invalid for Winograd/GEMM layers.
@@ -491,8 +648,33 @@ bool ModelInferencer::IsGPUEnabled() const {
     return impl_->use_gpu;
 }
 
+VulkanStatus ModelInferencer::GetVulkanStatus() const {
+    VulkanStatus status = impl_->vulkan_status;
+    status.enabled = impl_->use_gpu;
+    return status;
+}
+
 bool ModelInferencer::EnableGPU(bool enable) {
+    if (!impl_->initialized) {
+        std::cerr << "[ModelInferencer] GPU mode can only be changed after Init()"
+                  << std::endl;
+        return false;
+    }
+
     if (enable) {
+        if (impl_->use_gpu) {
+            return true;
+        }
+
+        // GPU 模式必须重载网络。Winograd/GEMM/Vulkan pipeline 均在
+        // load_param/load_model 阶段创建，不能只改运行时 option。
+        if (!impl_->loadNet(impl_->num_threads, true)) {
+            impl_->loadNet(impl_->num_threads, false);
+            impl_->use_gpu = false;
+            impl_->vulkan_status.enabled = false;
+            return false;
+        }
+
         // 尝试检测 Vulkan 支持
         // 创建一个临时提取器检测 GPU 推理
         impl_->net.opt.use_vulkan_compute = true;
@@ -508,16 +690,31 @@ bool ModelInferencer::EnableGPU(bool enable) {
 
         ncnn::Mat out;
         int ret = ex.extract(impl_->kOutputName, out);
-        if (ret != 0) {
+        if (ret != 0 || out.empty()) {
+            impl_->loadNet(impl_->num_threads, false);
             std::cerr << "[ModelInferencer] GPU 模式不可用：Vulkan 推理失败"
                       << std::endl;
             impl_->use_gpu = false;
+            impl_->vulkan_status.available = false;
+            impl_->vulkan_status.enabled = false;
+            impl_->vulkan_status.message = "Vulkan model inference failed; CPU fallback selected";
             return false;
         }
         impl_->use_gpu = true;
+        impl_->vulkan_status.available = true;
+        impl_->vulkan_status.enabled = true;
+        impl_->vulkan_status.message = "Vulkan device passed real Wav2Lip inference";
         std::cout << "[ModelInferencer] GPU 加速已启用" << std::endl;
     } else {
+        if (impl_->use_gpu && !impl_->loadNet(impl_->num_threads, false)) {
+            std::cerr << "[ModelInferencer] failed to switch back to CPU" << std::endl;
+            return false;
+        }
         impl_->use_gpu = false;
+        impl_->vulkan_status.enabled = false;
+        if (impl_->vulkan_status.available) {
+            impl_->vulkan_status.message = "Vulkan verified, currently disabled by caller";
+        }
         std::cout << "[ModelInferencer] GPU 加速已关闭，使用 CPU 推理" << std::endl;
     }
     return true;

@@ -16,7 +16,7 @@
 #include <opencv2/core.hpp>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/imgcodecs.hpp>
-#include <ncnn/mat.h>
+#include <mat.h>
 
 #include "audio/audio_loader.h"
 #include "audio/audio_noise_reduction.h"
@@ -84,7 +84,7 @@ int main(int argc, char** argv) {
     cv::Mat original = cv::imread(assets_dir + "/face.jpg");
     if (original.empty()) { std::cerr << "no face.jpg\n"; return 1; }
     core::FaceDetector detector;
-    detector.loadModel(model_dir + "/shape_predictor_68_face_landmarks.dat");
+    detector.loadModel(model_dir + "/face");
     auto faces = detector.detect(original);
     if (faces.empty()) { std::cerr << "no face detected\n"; return 1; }
     auto pts = detector.getLandmarks(original, faces[0]);

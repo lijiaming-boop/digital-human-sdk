@@ -4,7 +4,7 @@
 #include <string>
 #include <functional>
 
-#include <ncnn/net.h>
+#include <net.h>
 
 namespace digital_human {
 namespace model {

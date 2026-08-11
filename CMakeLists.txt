@@ -31,7 +31,31 @@ find_package(OpenMP REQUIRED)
 # 也不再无条件添加 -O3 / -march=native / -DNDEBUG，改由 CMAKE_BUILD_TYPE 控制，
 # Debug 构建可以正常启用 -O0 -g，二进制可移植到其他 CPU。
 find_package(OpenCV REQUIRED)
-find_package(ncnn REQUIRED)
+option(DIGITAL_HUMAN_REQUIRE_NCNN_VULKAN
+    "Require an ncnn build with Vulkan support for GPU inference"
+    ON)
+
+# Prefer the ncnn package selected by the active vcpkg toolchain.  Without
+# this explicit path, a stale system-wide /usr/local ncnn can silently win and
+# leave the SDK compiled without Vulkan even when vcpkg provides ncnn[vulkan].
+if(DEFINED VCPKG_INSTALLED_DIR AND DEFINED VCPKG_TARGET_TRIPLET
+   AND EXISTS "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/share/ncnn/ncnnConfig.cmake")
+    unset(ncnn_DIR CACHE)
+    find_package(ncnn CONFIG REQUIRED
+        PATHS "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/share/ncnn"
+        NO_DEFAULT_PATH)
+else()
+    find_package(ncnn CONFIG REQUIRED)
+endif()
+
+if(DIGITAL_HUMAN_REQUIRE_NCNN_VULKAN AND NOT NCNN_VULKAN)
+    message(FATAL_ERROR
+        "DigitalHumanSDK requires Vulkan-enabled ncnn. Install ncnn[vulkan] "
+        "or configure with -DDIGITAL_HUMAN_REQUIRE_NCNN_VULKAN=OFF for CPU-only builds.")
+endif()
+if(NCNN_VULKAN)
+    find_package(Vulkan REQUIRED)
+endif()
 message(STATUS ">> ncnn Found")
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET
@@ -49,11 +73,6 @@ message(STATUS ">> FFMPEG Include: ${FFMPEG_INCLUDE_DIRS}")
 pkg_check_modules(PORTAUDIO REQUIRED portaudio-2.0)
 message(STATUS ">> PortAudio Found: ${PORTAUDIO_VERSION}")
 message(STATUS ">> PortAudio Include: ${PORTAUDIO_INCLUDE_DIRS}")
-
-# 查找 dlib
-find_package(dlib REQUIRED)
-message(STATUS ">> dlib Found: ${dlib_VERSION}")
-# dlib::dlib target 会自动处理 include path
 
 message(STATUS "OpenCV library status:")
 message(STATUS "OpenCV version: ${OpenCV_VERSION}")

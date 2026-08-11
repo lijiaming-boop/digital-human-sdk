@@ -19,7 +19,7 @@ int main() {
     if (img.empty()) { std::cerr << "face.jpg load fail\n"; return 1; }
 
     core::FaceDetector detector;
-    detector.loadModel(model_dir + "/shape_predictor_68_face_landmarks.dat");
+    detector.loadModel(model_dir + "/face");
     auto faces = detector.detect(img);
     if (faces.empty()) { std::cerr << "no face\n"; return 1; }
     auto pts = detector.getLandmarks(img, faces[0]);

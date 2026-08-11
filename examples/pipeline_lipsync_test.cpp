@@ -9,6 +9,8 @@
  *
  * 用法:
  *   ./bin/pipeline_lipsync_test [assets_dir] [seconds] [target_fps] [audio_name]
+ *       [infer_threads] [out_dir] [model_param] [model_bin] [request_gpu]
+ *       [calibration_dir] [calibration_samples]
  *   默认: assets_dir=ASSETS_DIR, seconds=30, target_fps=25, audio=zw.mp3
  */
 
@@ -18,6 +20,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <string>
 #include <thread>
@@ -77,6 +80,13 @@ int main(int argc, char* argv[]) {
                                      : assets_dir + "/output/pipeline_lipsync";
 
     std::string model_dir = std::string(PROJECT_SOURCE_DIR) + "/models";
+    std::string model_param = (argc > 7) ? argv[7]
+        : model_dir + "/Wav2Lip-SD-GAN-opt.param";
+    std::string model_bin = (argc > 8) ? argv[8]
+        : model_dir + "/Wav2Lip-SD-GAN-opt.bin";
+    bool request_gpu = (argc > 9) && std::stoi(argv[9]) != 0;
+    std::string calibration_dir = (argc > 10) ? argv[10] : "";
+    size_t calibration_samples = (argc > 11) ? static_cast<size_t>(std::stoul(argv[11])) : 512;
     std::string frames_dir = out_dir + "/frames";
     std::filesystem::create_directories(frames_dir);
 
@@ -86,6 +96,8 @@ int main(int argc, char* argv[]) {
     std::cout << "  assets:  " << assets_dir << "\n";
     std::cout << "  时长上限: " << seconds << "s, 目标帧率: " << target_fps
               << "fps, 音频: " << audio_name << "\n\n";
+    std::cout << "  模型 param: " << model_param << "\n";
+    std::cout << "  请求 Vulkan: " << (request_gpu ? "yes" : "no") << "\n";
 
     // ====================================================================
     // 1. 加载音频（截到 seconds）
@@ -120,7 +132,7 @@ int main(int argc, char* argv[]) {
     std::cout << "[人脸] " << face_img.cols << "x" << face_img.rows << "\n";
 
     core::FaceDetector detector;
-    detector.loadModel(model_dir + "/shape_predictor_68_face_landmarks.dat");
+    detector.loadModel(model_dir + "/face");
     auto faces = detector.detect(face_img);
     if (faces.empty()) {
         std::cerr << "[FAIL] 未检测到人脸\n";
@@ -159,11 +171,23 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     pipeline.SetLandmarkModelPath(model_dir
-                                  + "/shape_predictor_68_face_landmarks.dat");
-    if (!pipeline.InitModelInferencer(model_dir)) {
+                                  + "/face");
+    if (!pipeline.InitModelInferencer(model_param, model_bin)) {
         std::cerr << "[FAIL] 模型初始化\n";
         return 1;
     }
+    if (!calibration_dir.empty()) {
+        pipeline.SetCalibrationDumpDirectory(calibration_dir, calibration_samples);
+        std::cout << "[量化] 导出真实校准输入: " << calibration_dir
+                  << " (最多 " << calibration_samples << " 对)\n";
+    }
+    if (!pipeline.EnableGPU(request_gpu)) {
+        if (request_gpu) {
+            std::cerr << "[WARN] Vulkan 请求失败，已回退 CPU\n";
+        }
+    }
+    std::cout << "[配置] 实际 Vulkan 推理: "
+              << (pipeline.IsGPUEnabled() ? "yes" : "no") << "\n";
     if (infer_threads > 0) {
         pipeline.SetInferenceThreads(infer_threads);
         std::cout << "[配置] 推理线程数: " << infer_threads << "\n";
@@ -380,6 +404,29 @@ int main(int argc, char* argv[]) {
     bool fps_ok   = content_fps >= 24.0;
     bool mouth_ok = (open_mean > 1.0)
                  && (corr > 0.15 || corr_smooth > 0.2);
+
+    {
+        std::ofstream report(out_dir + "/report.json", std::ios::trunc);
+        if (report) {
+            report << "{\n"
+                   << "  \"model_param\": \"" << model_param << "\",\n"
+                   << "  \"gpu_requested\": " << (request_gpu ? "true" : "false") << ",\n"
+                   << "  \"gpu_enabled\": " << (pipeline.IsGPUEnabled() ? "true" : "false") << ",\n"
+                   << "  \"frames_in\": " << frames_in << ",\n"
+                   << "  \"frames_out\": " << frames_out << ",\n"
+                   << "  \"inference_count\": " << m.inference_count << ",\n"
+                   << "  \"content_fps\": " << content_fps << ",\n"
+                   << "  \"speed_x\": " << speed_x << ",\n"
+                   << "  \"avg_inference_ms\": " << m.avg_inference_ms << ",\n"
+                   << "  \"avg_output_ms\": " << m.avg_output_ms << ",\n"
+                   << "  \"mouth_mean\": " << open_mean << ",\n"
+                   << "  \"mouth_correlation\": " << corr << ",\n"
+                   << "  \"mouth_correlation_smooth\": " << corr_smooth << ",\n"
+                   << "  \"fps_ok\": " << (fps_ok ? "true" : "false") << ",\n"
+                   << "  \"mouth_ok\": " << (mouth_ok ? "true" : "false") << "\n"
+                   << "}\n";
+        }
+    }
     std::cout << "\n[结论] 帧率" << (fps_ok ? "达标(>=24fps)" : "未达标")
               << ", 口型" << (mouth_ok ? "驱动有效" : "驱动无效") << "\n";
     return (fps_ok && mouth_ok) ? 0 : 2;

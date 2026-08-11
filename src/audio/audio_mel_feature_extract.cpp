@@ -97,10 +97,11 @@ struct MelFeatureExtract::Impl {
     // Hann 窗（对齐 scipy.signal.windows.hann / numpy.hanning）
     // ========================================================================
     std::vector<float> createHannWindow(int N) const {
+        constexpr float kPi = 3.14159265358979323846f;
         // numpy.hanning: 0.5 - 0.5*cos(2*pi*n/(N-1)), n=0..N-1
         std::vector<float> w(N);
         for (int n = 0; n < N; ++n) {
-            w[n] = 0.5f - 0.5f * std::cos(2.0f * static_cast<float>(M_PI) * n / (N - 1));
+            w[n] = 0.5f - 0.5f * std::cos(2.0f * kPi * n / (N - 1));
         }
         return w;
     }

@@ -8,6 +8,11 @@
 #include <thread>
 #include <utility>
 
+// WinBase.h defines ERROR as a macro. Keep the enum value usable on Windows.
+#ifdef ERROR
+#undef ERROR
+#endif
+
 namespace digital_human {
 namespace core {
 

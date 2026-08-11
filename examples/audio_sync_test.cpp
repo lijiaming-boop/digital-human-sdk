@@ -54,7 +54,7 @@ static std::vector<float> generateSineWave(double freq, int sampleRate,
     int numSamples = static_cast<int>(sampleRate * durationSec) * channels;
     std::vector<float> data(numSamples);
     for (int i = 0; i < numSamples / channels; ++i) {
-        float sample = static_cast<float>(std::sin(2.0 * M_PI * freq * i / sampleRate));
+        float sample = static_cast<float>(std::sin(2.0 * 3.14159265358979323846 * freq * i / sampleRate));
         for (int ch = 0; ch < channels; ++ch) {
             data[i * channels + ch] = sample;
         }

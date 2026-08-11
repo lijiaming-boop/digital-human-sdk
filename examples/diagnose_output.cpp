@@ -18,7 +18,7 @@
 #include <opencv2/imgproc.hpp>
 #include <opencv2/highgui.hpp>
 
-#include <ncnn/mat.h>
+#include <mat.h>
 
 #include "audio/audio_loader.h"
 #include "audio/audio_noise_reduction.h"
@@ -69,7 +69,7 @@ int main() {
     // 1. 人脸
     cv::Mat orig = cv::imread(assets_dir + "/face.jpg");
     digital_human::core::FaceDetector det;
-    det.loadModel(model_dir + "/shape_predictor_68_face_landmarks.dat");
+    det.loadModel(model_dir + "/face");
     auto faces = det.detect(orig);
     auto pts = det.getLandmarks(orig, faces[0]);
     digital_human::core::FaceAligner aligner;

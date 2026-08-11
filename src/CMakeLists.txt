@@ -22,9 +22,14 @@ target_link_libraries(digital_human_core PUBLIC
     ${OpenCV_LIBS}
     ncnn
     PkgConfig::FFMPEG
-    dlib::dlib
     ${PORTAUDIO_LIBRARIES}
 )
+
+if(NCNN_VULKAN)
+    # ncnn loads the Vulkan loader at runtime.  Link it explicitly so CMake
+    # carries the loader and its runtime search path into SDK consumers.
+    target_link_libraries(digital_human_core PUBLIC Vulkan::Vulkan)
+endif()
 
 # 第三方头文件路径（target 级）
 target_include_directories(digital_human_core PRIVATE

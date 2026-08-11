@@ -2,7 +2,7 @@
 #include <vector>
 #include <algorithm>
 #include <opencv2/opencv.hpp>
-#include <ncnn/net.h>
+#include <net.h>
 
 // 打印前 N 个概率最大的分类
 void print_topk(const std::vector<float>& cls_scores, int topk) {

@@ -24,7 +24,7 @@
 #include <thread>
 
 #include <opencv2/core.hpp>
-#include <ncnn/mat.h>
+#include <mat.h>
 
 #include "core/inference_worker.h"
 #include "core/render_thread.h"

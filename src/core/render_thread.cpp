@@ -7,7 +7,7 @@
 #include <sstream>
 
 #include <opencv2/core.hpp>
-#include <ncnn/mat.h>
+#include <mat.h>
 
 #include "audio/audio_player.h"
 #include "model/output_processor.h"

@@ -72,7 +72,7 @@ static std::vector<float> genSine(float freq, float dur, int sr) {
     int n = static_cast<int>(sr * dur);
     std::vector<float> pcm(n);
     for (int i = 0; i < n; ++i) {
-        pcm[i] = std::sin(2.0f * static_cast<float>(M_PI) * freq * i / sr);
+        pcm[i] = std::sin(2.0f * 3.14159265358979323846f * freq * i / sr);
     }
     return pcm;
 }

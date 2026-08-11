@@ -4,11 +4,13 @@
 #include <chrono>
 #include <cmath>
 #include <deque>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <sstream>
 #include <vector>
 
-#include <ncnn/mat.h>
+#include <mat.h>
 #include <opencv2/core.hpp>
 #include <opencv2/imgproc.hpp>
 
@@ -28,6 +30,32 @@ static constexpr double kEwmaAlpha = 0.3;
 
 /// @brief 指标滑动窗口大小
 static constexpr int kMetricsWindowSize = 100;
+
+bool WriteFloat32Npy(const std::filesystem::path& path, const ncnn::Mat& mat) {
+    if (mat.empty() || mat.elemsize != 4u) return false;
+    const int channels = std::max(1, mat.c);
+    const int height = std::max(1, mat.h);
+    const int width = std::max(1, mat.w);
+    std::string header = "{'descr': '<f4', 'fortran_order': False, 'shape': ("
+        + std::to_string(channels) + ", " + std::to_string(height) + ", "
+        + std::to_string(width) + "), }";
+    const size_t prefix_size = 10;
+    const size_t padding = (16 - ((prefix_size + header.size() + 1) % 16)) % 16;
+    header.append(padding, ' ');
+    header.push_back('\n');
+    if (header.size() > 65535) return false;
+
+    std::ofstream out(path, std::ios::binary);
+    if (!out) return false;
+    const char magic[] = {'\x93', 'N', 'U', 'M', 'P', 'Y', '\x01', '\x00'};
+    const uint16_t header_size = static_cast<uint16_t>(header.size());
+    out.write(magic, sizeof(magic));
+    out.write(reinterpret_cast<const char*>(&header_size), sizeof(header_size));
+    out.write(header.data(), static_cast<std::streamsize>(header.size()));
+    out.write(reinterpret_cast<const char*>(mat.data),
+              static_cast<std::streamsize>(mat.total() * mat.elemsize));
+    return static_cast<bool>(out);
+}
 
 // ============================================================================
 // InferenceMetrics 实现
@@ -98,6 +126,9 @@ struct InferenceWorker::Impl {
     mutable const uchar*  cached_face_ptr_ = nullptr;
     mutable int           cached_face_w_   = 0;
     mutable int           cached_face_h_   = 0;
+    std::filesystem::path calibration_dump_dir_;
+    size_t calibration_dump_limit_ = 0;
+    size_t calibration_dump_count_ = 0;
 
     // ========================================================================
     // 张量转换
@@ -196,6 +227,32 @@ struct InferenceWorker::Impl {
         return out;
     }
 
+    void DumpCalibrationInputs(const ncnn::Mat& audio, const ncnn::Mat& face) {
+        if (calibration_dump_dir_.empty()
+            || calibration_dump_count_ >= calibration_dump_limit_) {
+            return;
+        }
+        const size_t index = calibration_dump_count_;
+        const auto audio_path = calibration_dump_dir_ / "audio"
+                              / (std::to_string(index) + ".npy");
+        const auto face_path = calibration_dump_dir_ / "face"
+                             / (std::to_string(index) + ".npy");
+        if (!WriteFloat32Npy(audio_path, audio) || !WriteFloat32Npy(face_path, face)) {
+            std::cerr << "[InferenceWorker] failed to dump INT8 calibration sample "
+                      << index << std::endl;
+            return;
+        }
+        std::ofstream audio_list(calibration_dump_dir_ / "audio.list", std::ios::app);
+        std::ofstream face_list(calibration_dump_dir_ / "face.list", std::ios::app);
+        if (!audio_list || !face_list) {
+            std::cerr << "[InferenceWorker] failed to update calibration list files" << std::endl;
+            return;
+        }
+        audio_list << std::filesystem::absolute(audio_path).string() << '\n';
+        face_list << std::filesystem::absolute(face_path).string() << '\n';
+        ++calibration_dump_count_;
+    }
+
     // ========================================================================
     // 队列积压检测
     // ========================================================================
@@ -267,6 +324,8 @@ struct InferenceWorker::Impl {
                       << std::endl;
             return false;
         }
+
+        DumpCalibrationInputs(audio_ncnn, face_ncnn);
 
         // 推理 + 计时
         auto t0 = std::chrono::steady_clock::now();
@@ -365,6 +424,28 @@ const InferenceWorkerConfig& InferenceWorker::GetConfig() const {
 
 void InferenceWorker::SetModelInferencer(ModelInferencer* inferencer) {
     impl_->model_ = inferencer;
+}
+
+void InferenceWorker::SetCalibrationDumpDirectory(const std::string& directory,
+                                                  size_t max_samples) {
+    impl_->calibration_dump_dir_.clear();
+    impl_->calibration_dump_limit_ = 0;
+    impl_->calibration_dump_count_ = 0;
+    if (directory.empty() || max_samples == 0) return;
+
+    const std::filesystem::path root(directory);
+    std::error_code ec;
+    std::filesystem::create_directories(root / "audio", ec);
+    std::filesystem::create_directories(root / "face", ec);
+    if (ec) {
+        std::cerr << "[InferenceWorker] cannot create calibration directory: "
+                  << root << " (" << ec.message() << ")" << std::endl;
+        return;
+    }
+    std::ofstream(root / "audio.list", std::ios::trunc).close();
+    std::ofstream(root / "face.list", std::ios::trunc).close();
+    impl_->calibration_dump_dir_ = root;
+    impl_->calibration_dump_limit_ = max_samples;
 }
 
 // ============================================================================

@@ -96,7 +96,7 @@ int main(int argc, char* argv[]) {
 
     // 设置 dlib 人脸关键点模型路径
     std::string model_dir = std::string(PROJECT_SOURCE_DIR) + "/models";
-    std::string landmark_path = model_dir + "/shape_predictor_68_face_landmarks.dat";
+    std::string landmark_path = model_dir + "/face";
     pipeline.SetLandmarkModelPath(landmark_path);
     std::cout << "[INFO] 人脸关键点模型: " << landmark_path << "\n";
 

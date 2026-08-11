@@ -137,7 +137,7 @@ void TestAudioProcessorSelfAssign() {
     // 设置简单正弦波数据
     std::vector<float> audio_data(16000); // 1秒 @ 16kHz
     for (size_t i = 0; i < audio_data.size(); ++i) {
-        audio_data[i] = 0.5f * std::sin(2.0f * M_PI * 440.0f * i / 16000.0f);
+        audio_data[i] = 0.5f * std::sin(2.0f * 3.14159265358979323846f * 440.0f * i / 16000.0f);
     }
 
     // 验证基本配置
