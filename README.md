@@ -22,7 +22,7 @@
 
 ```bash
 # 1. 克隆仓库
-git clone http://git.cpptrain.top/rongguang/digital-human-sdk.git
+git clone https://github.com/lijiaming-boop/digital-human-sdk.git
 cd digital-human-sdk
 
 # 2. 安装依赖（Ubuntu 22.04）
