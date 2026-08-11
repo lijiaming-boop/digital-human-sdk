@@ -69,7 +69,7 @@ int benchmark_video_processor(const std::string& assets_dir,
     std::cout << "[INFO] 人脸图像: " << face_img.cols << "x" << face_img.rows << "\n";
 
     core::FaceDetector detector;
-    if (!detector.loadModel(model_dir + "/shape_predictor_68_face_landmarks.dat")) {
+    if (!detector.loadModel(model_dir + "/face")) {
         std::cerr << "[FAIL] dlib 模型加载失败\n";
         return 1;
     }

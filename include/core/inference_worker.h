@@ -2,7 +2,9 @@
 
 #include <memory>
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
+#include <string>
 
 #include "core/thread_base.h"
 #include "core/thread_safe_queue.h"
@@ -97,6 +99,11 @@ public:
 
     /// @brief 设置模型推理器（外部管理生命周期）
     void SetModelInferencer(model::ModelInferencer* inferencer);
+
+    /// @brief 将真实预处理后的 Wav2Lip 双输入导出为成对 .npy 校准样本。
+    /// 仅用于离线量化准备；设置为空目录可关闭导出。
+    void SetCalibrationDumpDirectory(const std::string& directory,
+                                     size_t max_samples = 512);
 
     // ========================================================================
     // 队列

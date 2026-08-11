@@ -5,6 +5,32 @@
       "name": "vcpkg",
       "displayName": "vcpkg (WSL x64-linux)",
       "toolchainFile": "$env{HOME}/vcpkg/scripts/buildsystems/vcpkg.cmake"
+    },
+    {
+      "name": "windows-ucrt64-vulkan",
+      "displayName": "Windows UCRT64 + Vulkan (D: build and dependency roots)",
+      "generator": "Ninja",
+      "binaryDir": "D:/digital-human-dev/build/digital-human-sdk-windows-ucrt64-vulkan",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CXX_COMPILER": "D:/MSYC64/ucrt64/bin/g++.exe",
+        "CMAKE_PREFIX_PATH": "D:/digital-human-dev/ncnn/ucrt64-vulkan;D:/MSYC64/ucrt64",
+        "DIGITAL_HUMAN_REQUIRE_NCNN_VULKAN": "ON"
+      },
+      "environment": {
+        "PATH": "D:/MSYC64/ucrt64/bin;D:/MSYC64/usr/bin;$penv{PATH}",
+        "TMP": "D:/digital-human-dev/temp",
+        "TEMP": "D:/digital-human-dev/temp",
+        "XDG_CACHE_HOME": "D:/digital-human-dev/cache"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "windows-ucrt64-vulkan",
+      "configurePreset": "windows-ucrt64-vulkan",
+      "configuration": "Release",
+      "jobs": 4
     }
   ]
 }

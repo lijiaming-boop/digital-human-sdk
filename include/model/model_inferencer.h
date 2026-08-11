@@ -2,10 +2,20 @@
 
 #include <memory>
 #include <string>
-#include <ncnn/mat.h>
+#include <mat.h>
 
 namespace digital_human {
 namespace model {
+
+/// @brief Vulkan 运行时诊断结果。available 只有在设备枚举和一次真实推理均成功后才为 true。
+struct VulkanStatus {
+    bool compiled = false;
+    bool available = false;
+    bool enabled = false;
+    int  device_count = 0;
+    int  device_index = -1;
+    std::string message;
+};
 
 /**
  * @brief Wav2Lip-SD-GAN 模型推理器
@@ -112,6 +122,9 @@ public:
      * @return false 设置失败（ncnn 未编译 Vulkan 支持）
      */
     bool EnableGPU(bool enable);
+
+    /// @brief 获取最近一次 Vulkan 初始化/真实推理验证的状态与失败原因。
+    VulkanStatus GetVulkanStatus() const;
 
     /// @brief 获取目标推理延迟阈值（毫秒），用于 autoTune 判定
     float GetTargetLatencyMs() const;

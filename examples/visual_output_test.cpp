@@ -23,7 +23,7 @@
 #include <opencv2/imgproc.hpp>
 #include <opencv2/highgui.hpp>
 
-#include <ncnn/mat.h>
+#include <mat.h>
 
 #include "audio/audio_loader.h"
 #include "audio/audio_noise_reduction.h"
@@ -77,7 +77,7 @@ int main(int argc, char* argv[]) {
 
     // 人脸检测
     digital_human::core::FaceDetector detector;
-    std::string detector_model = model_dir + "/shape_predictor_68_face_landmarks.dat";
+    std::string detector_model = model_dir + "/face";
     if (std::filesystem::exists(detector_model)) {
         detector.loadModel(detector_model);
     }

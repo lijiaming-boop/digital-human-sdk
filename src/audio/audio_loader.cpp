@@ -4,7 +4,9 @@ extern "C" {
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
 #include <libswresample/swresample.h>
+#include <libavutil/channel_layout.h>
 #include <libavutil/opt.h>
+#include <libavutil/version.h>
 }
 
 #include <algorithm>
@@ -67,18 +69,36 @@ struct AudioLoader::Impl {
         }
 
         // 修复: 当 channel_layout 未设置时（某些 WAV 文件），根据 channels 推导
-        int64_t src_layout = codecCtx->channel_layout;
-        if (src_layout == 0) {
-            src_layout = av_get_default_channel_layout(codecCtx->channels);
-        }
-
-        int64_t monoLayout = AV_CH_LAYOUT_MONO;
         SwrContext* swrCtx = nullptr;
-        swrCtx = swr_alloc_set_opts(nullptr,
-            monoLayout, AV_SAMPLE_FMT_FLT, 16000,
-            src_layout, codecCtx->sample_fmt, codecCtx->sample_rate,
+#if LIBAVUTIL_VERSION_MAJOR >= 57
+        AVChannelLayout source_layout = codecCtx->ch_layout;
+        bool owns_source_layout = false;
+        if (source_layout.nb_channels == 0) {
+            av_channel_layout_default(&source_layout, 1);
+            owns_source_layout = true;
+        }
+        AVChannelLayout mono_layout = AV_CHANNEL_LAYOUT_MONO;
+        const int swr_options_result = swr_alloc_set_opts2(
+            &swrCtx,
+            &mono_layout, AV_SAMPLE_FMT_FLT, 16000,
+            &source_layout, codecCtx->sample_fmt, codecCtx->sample_rate,
             0, nullptr);
-        if (!swrCtx || swr_init(swrCtx) < 0) {
+        if (owns_source_layout) {
+            av_channel_layout_uninit(&source_layout);
+        }
+#else
+        int64_t source_layout = codecCtx->channel_layout;
+        if (source_layout == 0) {
+            source_layout = av_get_default_channel_layout(codecCtx->channels);
+        }
+        swrCtx = swr_alloc_set_opts(
+            nullptr,
+            AV_CH_LAYOUT_MONO, AV_SAMPLE_FMT_FLT, 16000,
+            source_layout, codecCtx->sample_fmt, codecCtx->sample_rate,
+            0, nullptr);
+        const int swr_options_result = swrCtx ? 0 : AVERROR(ENOMEM);
+#endif
+        if (swr_options_result < 0 || !swrCtx || swr_init(swrCtx) < 0) {
             avcodec_free_context(&codecCtx);
             avformat_close_input(&formatCtx);
             swr_free(&swrCtx);

@@ -30,7 +30,7 @@
 #include <opencv2/imgproc.hpp>
 #include <opencv2/imgcodecs.hpp>
 
-#include <ncnn/mat.h>
+#include <mat.h>
 
 #include "model/model_inferencer.h"
 #include "model/output_processor.h"
@@ -397,8 +397,14 @@ int stage_gpu_validate(model::ModelInferencer& inferencer) {
 
     // ---- 启用 GPU ----
     bool gpu_ok = inferencer.EnableGPU(true);
+    const auto gpu_status = inferencer.GetVulkanStatus();
     std::cout << "  [G1] EnableGPU(true) => " << (gpu_ok ? "SUCCESS" : "FAIL")
               << " (IsGPUEnabled=" << inferencer.IsGPUEnabled() << ")\n";
+    std::cout << "  [G1] compiled=" << gpu_status.compiled
+              << " devices=" << gpu_status.device_count
+              << " device_index=" << gpu_status.device_index
+              << " verified=" << gpu_status.available
+              << " reason=\"" << gpu_status.message << "\"\n";
 
     if (gpu_ok) {
         // GPU warmup + 测试

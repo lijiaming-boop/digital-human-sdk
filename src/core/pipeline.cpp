@@ -750,6 +750,26 @@ bool Pipeline::InitModelInferencer(const std::string& model_dir) {
     return impl_->model_inferencer.Init(model_dir);
 }
 
+bool Pipeline::InitModelInferencer(const std::string& param_path,
+                                   const std::string& bin_path) {
+    return impl_->model_inferencer.Init(param_path, bin_path);
+}
+
+bool Pipeline::EnableGPU(bool enable) {
+    return impl_->model_inferencer.EnableGPU(enable);
+}
+
+bool Pipeline::IsGPUEnabled() const {
+    return impl_->model_inferencer.IsGPUEnabled();
+}
+
+void Pipeline::SetCalibrationDumpDirectory(const std::string& directory,
+                                           size_t max_samples) {
+    if (impl_->inference_worker) {
+        impl_->inference_worker->SetCalibrationDumpDirectory(directory, max_samples);
+    }
+}
+
 void Pipeline::SetInferenceThreads(int n) {
     if (n > 0) {
         impl_->model_inferencer.SetThreadCount(n);

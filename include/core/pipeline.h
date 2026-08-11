@@ -232,14 +232,28 @@ public:
     /// @brief 获取音频时钟
     double GetAudioClockMs() const;
 
-    /// @brief 设置 dlib 人脸关键点模型路径（拟合图片/视频前必须调用）
-    /// @param path 模型文件路径（shape_predictor_68_face_landmarks.dat）
+    /// @brief 设置 SCRFD + 2D106 人脸模型目录（拟合图片/视频前必须调用）
+    /// @param path 包含 SCRFD ncnn 模型与 2d106det.onnx 的目录
     void SetLandmarkModelPath(const std::string& path);
 
     /// @brief 初始化内置 ModelInferencer（Wav2Lip 推理模型）
     /// @param model_dir 模型目录（含 Wav2Lip-SD-GAN-opt.param/.bin）
     /// @return true 初始化成功
     bool InitModelInferencer(const std::string& model_dir);
+
+    /// @brief 使用显式 NCNN 模型文件初始化推理器，供模型变体评测和受控发布使用。
+    bool InitModelInferencer(const std::string& param_path,
+                             const std::string& bin_path);
+
+    /// @brief 在启动前启用或关闭 Vulkan 推理；失败时保持/回退 CPU 模式。
+    bool EnableGPU(bool enable);
+
+    /// @brief 当前流水线内的模型是否已通过真实推理验证并运行在 Vulkan GPU 上。
+    bool IsGPUEnabled() const;
+
+    /// @brief 离线导出真实 Wav2Lip 输入，供 NCNN INT8 校准使用。
+    void SetCalibrationDumpDirectory(const std::string& directory,
+                                     size_t max_samples = 512);
 
     /// @brief 设置推理线程数（0=保持 autoTune 结果）
     ///

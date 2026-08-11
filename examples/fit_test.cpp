@@ -194,7 +194,7 @@ int main(int argc, char* argv[]) {
         bool model_loaded = false;
         try {
             // 尝试加载 dlib 模型
-            std::string detector_model = model_path + "/shape_predictor_68_face_landmarks.dat";
+            std::string detector_model = model_path + "/face";
             if (std::filesystem::exists(detector_model)) {
                 model_loaded = detector.loadModel(detector_model);
             }

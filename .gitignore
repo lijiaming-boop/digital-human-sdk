@@ -46,3 +46,17 @@ assets/output/
 *.dat
 *.log
 *.tmp
+
+############################## 个人资料（不公开）
+数字人SDK项目面试题库_整合补充版.md
+数字人sdk面试文档_优化版.md
+docs/interview_faq_framework_inference.md
+
+############################## 调试输出
+face_detector_result.jpg
+landmark_result.jpg
+face_mask_debug.png
+
+############################## Python
+__pycache__/
+*.pyc

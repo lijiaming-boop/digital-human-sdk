@@ -10,6 +10,7 @@ struct AudioFramer::Impl {
     std::vector<double> hammingWindow_;
 
     std::vector<double> buildHammingWindow(int frameSize) {
+        constexpr double kPi = 3.14159265358979323846;
         if (frameSize < 2) {
             // frameSize==1 时 denom=0 会除零，强制最小为 2
             return {1.0};
@@ -17,7 +18,7 @@ struct AudioFramer::Impl {
         std::vector<double> window(frameSize);
         double denom = static_cast<double>(frameSize - 1);
         for (int i = 0; i < frameSize; i++) {
-            window[i] = 0.54 - 0.46 * std::cos(2.0 * M_PI * i / denom);
+            window[i] = 0.54 - 0.46 * std::cos(2.0 * kPi * i / denom);
         }
         return window;
     }
@@ -41,8 +42,6 @@ struct AudioFramer::Impl {
         } else {
             numFrames = (N - frameSize + hopSize - 1) / hopSize + 1;
         }
-
-        bool needPad = ((numFrames - 1) * hopSize + frameSize > N);
 
         if (hammingWindow_.size() != static_cast<size_t>(frameSize)) {
             hammingWindow_ = buildHammingWindow(frameSize);

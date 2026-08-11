@@ -29,7 +29,7 @@ cd digital-human-sdk
 sudo apt install -y build-essential cmake pkg-config \
     libopencv-dev libavformat-dev libavcodec-dev \
     libavutil-dev libswresample-dev libswscale-dev \
-    libportaudio-dev libdlib-dev
+    libportaudio-dev
 
 # 3. 安装 ncnn（手动）
 git clone https://github.com/Tencent/ncnn.git
@@ -79,9 +79,6 @@ sudo apt install -y libavformat-dev libavcodec-dev \
 
 # PortAudio
 sudo apt install -y portaudio19-dev
-
-# dlib
-sudo apt install -y libdlib-dev
 
 # ncnn（源码安装）
 git clone https://github.com/Tencent/ncnn.git
@@ -452,7 +449,7 @@ cmake ..
 
 **Q: OpenCV 版本不匹配** — Ubuntu 22.04 默认安装 OpenCV 4.5.4
 
-**Q: dlib 警告** — `dlib_INCLUDE_DIRS` 已弃用，不影响编译
+**人脸模型** — 请按 [深度学习人脸模型](docs/models/face_models.md) 准备 SCRFD 与 2D106 权重。
 
 ### 运行时
 

@@ -56,7 +56,7 @@ static std::vector<float> generateSine(float freq_hz, int sample_rate,
     int total_samples = static_cast<int>(sample_rate * duration_sec) * channels;
     std::vector<float> data(total_samples);
     for (int i = 0; i < total_samples / channels; ++i) {
-        float val = std::sin(2.0f * static_cast<float>(M_PI) * freq_hz * i / sample_rate);
+        float val = std::sin(2.0f * 3.14159265358979323846f * freq_hz * i / sample_rate);
         for (int c = 0; c < channels; ++c) {
             data[i * channels + c] = val;
         }

@@ -26,7 +26,7 @@
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/videoio.hpp>
 
-#include <ncnn/mat.h>
+#include <mat.h>
 
 #include "audio/audio_loader.h"
 #include "audio/audio_noise_reduction.h"
@@ -119,7 +119,7 @@ int main(int argc, char* argv[]) {
     if (original.empty()) { std::cerr << "FAIL: face.jpg\n"; return 1; }
 
     digital_human::core::FaceDetector detector;
-    detector.loadModel(model_dir + "/shape_predictor_68_face_landmarks.dat");
+    detector.loadModel(model_dir + "/face");
     auto faces = detector.detect(original);
     if (faces.empty()) { std::cerr << "FAIL: no face\n"; return 1; }
 

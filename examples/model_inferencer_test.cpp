@@ -23,7 +23,7 @@
 #include <cstdlib>
 
 #include "model/model_inferencer.h"
-#include <ncnn/mat.h>
+#include <mat.h>
 
 #include <filesystem>
 namespace fs = std::filesystem;
@@ -238,9 +238,11 @@ static void testGPUDetection() {
         return;
     }
 
-    // 检查初始状态（CPU 模式）
+    // Vulkan 通过模型预热时，Init 会优先启用 GPU；否则必须保持 CPU 回退。
     bool gpuEnabled = inferencer.IsGPUEnabled();
-    TEST_CHECK(!gpuEnabled, "6.1 初始为 CPU 模式 (GPU 未启用)");
+    const auto vulkanStatus = inferencer.GetVulkanStatus();
+    TEST_CHECK(gpuEnabled == vulkanStatus.available,
+               "6.1 初始模式与 Vulkan 可用性一致");
 
     // EnableGPU 不应崩溃（可能失败，但返回应有意义）
     bool result = inferencer.EnableGPU(true);

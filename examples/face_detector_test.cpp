@@ -27,7 +27,7 @@ void testEmptyImage() {
     std::cout << (faces.empty() ? "  PASS: returned empty" : "  FAIL: should be empty") << std::endl;
 }
 
-void testRealImage(const std::string& image_path) {
+void testRealImage(const std::string& image_path, const std::string& model_dir) {
     std::cout << "[Test 2] Real face image..." << std::endl;
 
     cv::Mat img = cv::imread(image_path);
@@ -38,6 +38,10 @@ void testRealImage(const std::string& image_path) {
     std::cout << "  Image size: " << img.cols << "x" << img.rows << std::endl;
 
     FaceDetector detector;
+    if (!detector.loadModel(model_dir)) {
+        std::cout << "  SKIP: face models are unavailable in " << model_dir << std::endl;
+        return;
+    }
     std::vector<cv::Rect> faces = detector.detect(img);
     std::cout << "  Found " << faces.size() << " face(s)" << std::endl;
 
@@ -57,7 +61,7 @@ void testRealImage(const std::string& image_path) {
     std::cout << "  PASS: result saved to " << output << std::endl;
 }
 
-void testDownsampleStrategy(const std::string& image_path) {
+void testDownsampleStrategy(const std::string& image_path, const std::string& model_dir) {
     std::cout << "[Test 3] Large image downsample..." << std::endl;
 
     cv::Mat img = cv::imread(image_path);
@@ -72,6 +76,10 @@ void testDownsampleStrategy(const std::string& image_path) {
     std::cout << "  Scaled to: " << large_img.cols << "x" << large_img.rows << std::endl;
 
     FaceDetector detector;
+    if (!detector.loadModel(model_dir)) {
+        std::cout << "  SKIP: face models are unavailable in " << model_dir << std::endl;
+        return;
+    }
     std::vector<cv::Rect> faces = detector.detect(large_img);
     std::cout << "  Found " << faces.size() << " face(s)" << std::endl;
 
@@ -101,15 +109,17 @@ int main(int argc, char** argv) {
     } else {
         image_path = resolvePath("face.jpg");
     }
-    std::cout << "Image: " << image_path << std::endl << std::endl;
+    const std::string model_dir = argc >= 3 ? argv[2] : resolvePath("models/face");
+    std::cout << "Image: " << image_path << std::endl;
+    std::cout << "Face models: " << model_dir << std::endl << std::endl;
 
     testEmptyImage();
     std::cout << std::endl;
 
-    testRealImage(image_path);
+    testRealImage(image_path, model_dir);
     std::cout << std::endl;
 
-    testDownsampleStrategy(image_path);
+    testDownsampleStrategy(image_path, model_dir);
     std::cout << std::endl;
 
     std::cout << "===== Done =====" << std::endl;

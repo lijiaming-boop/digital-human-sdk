@@ -23,7 +23,7 @@
 #include <opencv2/imgproc.hpp>
 #include <opencv2/imgcodecs.hpp>
 
-#include <ncnn/mat.h>
+#include <mat.h>
 
 using namespace digital_human::model;
 

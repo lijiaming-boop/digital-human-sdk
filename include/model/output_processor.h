@@ -1,7 +1,7 @@
 #pragma once
 
 #include <memory>
-#include <ncnn/mat.h>
+#include <mat.h>
 #include <opencv2/core.hpp>
 
 namespace digital_human {

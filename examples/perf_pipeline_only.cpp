@@ -20,7 +20,7 @@
 #include <opencv2/core.hpp>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/imgcodecs.hpp>
-#include <ncnn/mat.h>
+#include <mat.h>
 
 #include "core/pipeline.h"
 #include "core/packet.h"
@@ -64,7 +64,7 @@ int benchmark_video_processor(const std::string& assets_dir,
     core::VideoProcessor vp("VP-Bench");
     core::VideoProcessorConfig vcfg;
     vp.SetConfig(vcfg);
-    vp.SetLandmarkModelPath(model_dir + "/shape_predictor_68_face_landmarks.dat");
+    vp.SetLandmarkModelPath(model_dir + "/face");
 
     // 手动跑 Run() 太复杂，直接调 ProcessOne（暴露的话）
     // 检查 VideoProcessor 是否暴露了 ProcessOne
@@ -73,7 +73,7 @@ int benchmark_video_processor(const std::string& assets_dir,
     // 替代方案：模拟 VideoProcessor::ProcessOne 的关键路径
     // 加载模型后调用 face_detector + face_aligner + face_mask_generator
     core::FaceDetector detector;
-    if (!detector.loadModel(model_dir + "/shape_predictor_68_face_landmarks.dat")) {
+    if (!detector.loadModel(model_dir + "/face")) {
         std::cerr << "[FAIL] dlib 模型加载失败\n";
         return 1;
     }
