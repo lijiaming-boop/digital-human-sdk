@@ -1,4 +1,4 @@
-# Digital Human SDK — Code Wiki
+# Digital Human SDK — Code Wiki（参考）
 
 > 基于 Wav2Lip-SD-GAN 的数字人口型同步 SDK，提供完整的音视频处理流水线：
 > 音频特征提取、人脸检测对齐、模型推理、口唇融合渲染。
@@ -163,7 +163,7 @@ digital-human-sdk/
 ├── CMakePresets.json              # vcpkg 工具链预设
 ├── build.sh                       # WSL 构建脚本（含 .so 软链修复）
 ├── README.md                      # 项目说明
-├── Code-Wiki.md                   # 本文档
+├── reference/code_wiki.md         # 本文档
 │
 ├── include/                       # 公共头文件（PUBLIC）
 │   ├── audio/                     # 音频处理模块头文件

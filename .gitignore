@@ -1,8 +1,17 @@
 ############################## 构建产物
+# 覆盖所有 CMake 构建树（含历史 phase 目录与自定义名称），避免误入库
 build/
+build_*/
+build-*/
 build_wsl/
+build-wsl-*/
+build-windows-*/
 out/
 cmake-build-*/
+
+############################## CMake 用户本地配置（含本机绝对路径，不入库）
+CMakeUserPresets.json
+CMakeUserPresets*.json
 
 ############################## IDE / 编辑器
 .vs/
@@ -18,8 +27,9 @@ cmake-build-*/
 Thumbs.db
 desktop.ini
 
-############################## 资源：媒体输出（不应入库）
+############################## 资源：媒体输出与运行产物（不应入库）
 assets/output/
+artifacts/
 
 ############################## 资源：模型文件（应走 Git LFS 或外部下载脚本）
 *.bin

@@ -29,7 +29,7 @@ cd digital-human-sdk
 sudo apt install -y build-essential cmake pkg-config \
     libopencv-dev libavformat-dev libavcodec-dev \
     libavutil-dev libswresample-dev libswscale-dev \
-    libportaudio-dev
+    libportaudio-dev libcurl4-openssl-dev
 
 # 3. 安装 ncnn（手动）
 git clone https://github.com/Tencent/ncnn.git
@@ -79,6 +79,9 @@ sudo apt install -y libavformat-dev libavcodec-dev \
 
 # PortAudio
 sudo apt install -y portaudio19-dev
+
+# 可选：HTTP 文本生成与 TTS Client
+sudo apt install -y libcurl4-openssl-dev
 
 # ncnn（源码安装）
 git clone https://github.com/Tencent/ncnn.git
@@ -139,6 +142,28 @@ build/
 
 ## 模块架构
 
+### 实时会话与推流闭环
+
+```text
+用户文本/ASR结果 → llama.cpp/OpenAI兼容服务 → 增量分句 → HTTP TTS服务
+                                                ↓ 16kHz mono PCM
+静态数字人底图 ────────────────────────→ ConversationSession
+                                                ↓
+                                  PushAudio + PushVideo
+                                                ↓
+                                    现有 Wav2Lip Pipeline
+                                                ↓
+                                      BGR 输出帧 + PTS
+                                                ↓
+                                      H.264 + AAC 编码
+                                                ↓
+                                      RTMP / RTSP 发布
+```
+
+文本生成和 TTS 都通过抽象 Client 接入；当前已提供 llama.cpp OpenAI Chat Completions 适配器。外围媒体层将 TTS PCM 编码为 AAC、将 SDK 渲染 BGR 编码为 H.264，并支持发布到 RTMP/RTSP 服务端。详细架构、llama.cpp 配置和推流接入方式见 [文档索引](docs/README.md)。
+
+用户图片上传、头像热更新、真实本地 TTS 和持久多轮会话的完整命令见 [实时头像数字人会话运行指南](docs/guides/realtime_avatar_conversation.md)。
+
 ### 数据流全景
 
 ```
@@ -190,6 +215,9 @@ VideoProducer ──► VideoProcessor ──►└─────────�
 
 ```
 include/
+├── dialog/                         # 对话编排、文本服务、增量分句
+├── tts/                            # TTS Client 与 PCM 契约
+├── network/                        # 可选 libcurl HTTP Transport
 ├── audio/                          # 音频处理模块
 │   ├── audio_loader.h             # 音频文件加载
 │   ├── audio_framer.h             # 分帧（frame/hop）
@@ -248,6 +276,31 @@ cd build
 ./bin/render_thread_test        # 28 测试
 ./bin/frame_scheduler_test      # 62 测试
 ./bin/audio_sync_test           # 37 测试
+
+# 实时会话第一阶段
+./bin/dialog_module_test
+./bin/conversation_sdk_integration_test
+
+# AAC/H.264 编码与推流
+./bin/stream_publisher_test
+./bin/conversation_stream_integration_test
+./bin/stream_network_publish_test rtsp rtsp://127.0.0.1:8554/live/test
+
+# HTTP Client 冒烟测试（先启动 tools/mock_dialog_service.py）
+./bin/http_service_client_test \
+  http://127.0.0.1:18080/text \
+  http://127.0.0.1:18080/tts
+
+# llama.cpp SSE/JSON 与 ConversationSession 闭环
+./bin/llama_cpp_client_test \
+  http://127.0.0.1:8090/v1/chat/completions \
+  Qwen3-4B-Q4_K_M.gguf
+
+# 真实 llama.cpp→HTTP TTS→Wav2Lip→H.264/AAC 全链路
+./bin/full_conversation_chain_test \
+  http://127.0.0.1:8090/v1/chat/completions \
+  http://127.0.0.1:18080/tts \
+  full_conversation_chain.flv file Qwen3-4B-Q4_K_M.gguf
 ```
 
 ### 快速验证脚本
@@ -411,6 +464,15 @@ switch (decision.action) {
 | `target_fps` | 25.0 | 目标帧率 |
 | `sync_threshold_ms` | 30.0 | 同步阈值 (ms) |
 | `max_drift_ms` | 100.0 | 最大允许漂移 (ms) |
+
+### SDKConfig（文件处理）
+
+| 字段 | 默认值 | 说明 |
+|------|--------|------|
+| `file_audio_lead_ms` | 300 | `ProcessFile` 中音频相对已提交视频允许的最大领先量，避免供料不足或过度预读 |
+| `file_stall_timeout_ms` | 30000 | 文件处理连续无输出进展的超时时间，超时后停止流水线并唤醒阻塞队列 |
+
+`ProcessFile` 使用独立的音频、视频生产线程；音频仍是同步主时钟，领先水位仅用于控制输入反压。
 
 ### InferenceWorkerConfig
 

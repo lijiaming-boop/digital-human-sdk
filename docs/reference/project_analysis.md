@@ -1,4 +1,4 @@
-# Digital Human SDK 项目分析文档
+# Digital Human SDK 项目分析（历史参考）
 
 > 基于 Wav2Lip-SD-GAN 的数字人口型同步 SDK，Ubuntu 22.04 / WSL2 环境下 C++ 实现。
 > 本文档覆盖全链路设计、设计亮点、性能瓶颈、项目难点与面试回答。

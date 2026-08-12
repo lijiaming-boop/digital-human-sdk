@@ -1,4 +1,4 @@
-# Windows 原生 Vulkan 验证记录
+# Windows 原生 Vulkan GPU 验证记录
 
 验证日期：2026-08-07。目标为在 Windows 原生环境中运行项目的
 `Wav2Lip-SD-GAN-opt` NCNN 模型，验证 Vulkan、GPU 选择、数值正确性和
