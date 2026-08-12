@@ -1,36 +1,108 @@
 {
   "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 21,
+    "patch": 0
+  },
   "configurePresets": [
     {
-      "name": "vcpkg",
-      "displayName": "vcpkg (WSL x64-linux)",
-      "toolchainFile": "$env{HOME}/vcpkg/scripts/buildsystems/vcpkg.cmake"
-    },
-    {
-      "name": "windows-ucrt64-vulkan",
-      "displayName": "Windows UCRT64 + Vulkan (D: build and dependency roots)",
+      "name": "linux-cpu-only",
+      "displayName": "Linux CPU-only (portable, vcpkg)",
+      "description": "Portable Linux CPU-only build. Set VCPKG_ROOT to your vcpkg checkout. Vulkan is disabled so a CPU-only ncnn is sufficient for CI and unit tests.",
       "generator": "Ninja",
-      "binaryDir": "D:/digital-human-dev/build/digital-human-sdk-windows-ucrt64-vulkan",
+      "binaryDir": "${sourceDir}/build",
+      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
-        "CMAKE_CXX_COMPILER": "D:/MSYC64/ucrt64/bin/g++.exe",
-        "CMAKE_PREFIX_PATH": "D:/digital-human-dev/ncnn/ucrt64-vulkan;D:/MSYC64/ucrt64",
+        "DIGITAL_HUMAN_REQUIRE_NCNN_VULKAN": "OFF"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    },
+    {
+      "name": "linux-vulkan",
+      "displayName": "Linux + Vulkan (portable, vcpkg)",
+      "description": "Portable Linux build with Vulkan-enabled ncnn for GPU inference. Set VCPKG_ROOT and install ncnn[vulkan].",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build",
+      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "DIGITAL_HUMAN_REQUIRE_NCNN_VULKAN": "ON"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    },
+    {
+      "name": "windows-vulkan",
+      "displayName": "Windows + Vulkan (portable)",
+      "description": "Portable Windows Vulkan build. Set DIGITAL_HUMAN_NCNN_DIR to the ncnn config dir and DIGITAL_HUMAN_MINGW_BIN to the MinGW runtime bin dir. See CMakeUserPresets.json for a machine-specific example.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CXX_COMPILER": "$env{DIGITAL_HUMAN_MINGW_BIN}/g++.exe",
+        "CMAKE_PREFIX_PATH": "$env{DIGITAL_HUMAN_NCNN_DIR}",
         "DIGITAL_HUMAN_REQUIRE_NCNN_VULKAN": "ON"
       },
       "environment": {
-        "PATH": "D:/MSYC64/ucrt64/bin;D:/MSYC64/usr/bin;$penv{PATH}",
-        "TMP": "D:/digital-human-dev/temp",
-        "TEMP": "D:/digital-human-dev/temp",
-        "XDG_CACHE_HOME": "D:/digital-human-dev/cache"
+        "PATH": "$env{DIGITAL_HUMAN_MINGW_BIN};$penv{PATH}"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "windows-cpu-only",
+      "displayName": "Windows CPU-only (portable)",
+      "description": "Portable Windows CPU-only build for CI and unit tests. Set DIGITAL_HUMAN_NCNN_DIR and DIGITAL_HUMAN_MINGW_BIN.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CXX_COMPILER": "$env{DIGITAL_HUMAN_MINGW_BIN}/g++.exe",
+        "CMAKE_PREFIX_PATH": "$env{DIGITAL_HUMAN_NCNN_DIR}",
+        "DIGITAL_HUMAN_REQUIRE_NCNN_VULKAN": "OFF"
+      },
+      "environment": {
+        "PATH": "$env{DIGITAL_HUMAN_MINGW_BIN};$penv{PATH}"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
       }
     }
   ],
   "buildPresets": [
     {
-      "name": "windows-ucrt64-vulkan",
-      "configurePreset": "windows-ucrt64-vulkan",
-      "configuration": "Release",
-      "jobs": 4
+      "name": "linux-cpu-only",
+      "configurePreset": "linux-cpu-only",
+      "configuration": "Release"
+    },
+    {
+      "name": "linux-vulkan",
+      "configurePreset": "linux-vulkan",
+      "configuration": "Release"
+    },
+    {
+      "name": "windows-vulkan",
+      "configurePreset": "windows-vulkan",
+      "configuration": "Release"
+    },
+    {
+      "name": "windows-cpu-only",
+      "configurePreset": "windows-cpu-only",
+      "configuration": "Release"
     }
   ]
 }

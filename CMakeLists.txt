@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.16)
 project(DigitalHumanSDK VERSION 0.1.0 LANGUAGES CXX)
 
+include(CTest)
+
 ############################## 全局配置
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -65,6 +67,22 @@ pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET
     libswresample
     libswscale
 )
+
+# 可选 HTTP 客户端：用于文本生成服务和 TTS 服务。核心抽象接口在未安装
+# libcurl 时仍可构建，便于纯离线 SDK 和单元测试使用 Fake Client。
+option(DIGITAL_HUMAN_ENABLE_HTTP_CLIENT
+    "Build HTTP text-generation and TTS clients when libcurl is available"
+    ON)
+if(DIGITAL_HUMAN_ENABLE_HTTP_CLIENT)
+    pkg_check_modules(CURL QUIET IMPORTED_TARGET libcurl)
+    if(CURL_FOUND)
+        message(STATUS ">> libcurl Found: ${CURL_VERSION}")
+    else()
+        message(WARNING
+            "libcurl development files were not found; HTTP clients will return "
+            "an availability error, while dialog interfaces and tests remain enabled.")
+    endif()
+endif()
 
 message(STATUS ">> FFMPEG Found: ${FFMPEG_VERSION}")
 message(STATUS ">> FFMPEG Include: ${FFMPEG_INCLUDE_DIRS}")

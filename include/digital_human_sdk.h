@@ -30,6 +30,7 @@ enum class SDKError {
     AUDIO_LOAD_FAILED   = 11,   ///< 音频文件加载失败
     IMAGE_LOAD_FAILED   = 12,   ///< 图像文件加载失败
     TIMEOUT             = 13,   ///< 等待超时
+    SHUTDOWN_TIMEOUT    = 14,   ///< 停止超时，仍可再次调用 Stop()
     UNKNOWN             = 99,   ///< 未知错误
 };
 
@@ -50,6 +51,7 @@ inline const char* SDKErrorToString(SDKError err) {
         case SDKError::AUDIO_LOAD_FAILED:      return "AUDIO_LOAD_FAILED";
         case SDKError::IMAGE_LOAD_FAILED:      return "IMAGE_LOAD_FAILED";
         case SDKError::TIMEOUT:                return "TIMEOUT";
+        case SDKError::SHUTDOWN_TIMEOUT:       return "SHUTDOWN_TIMEOUT";
         case SDKError::UNKNOWN:                return "UNKNOWN";
         default:                               return "UNKNOWN";
     }
@@ -65,6 +67,7 @@ enum class SDKState {
     INITIALIZED,    ///< 已初始化，未启动
     RUNNING,        ///< 运行中
     PAUSED,         ///< 已暂停
+    STOPPING,       ///< 正在等待工作线程退出
     STOPPED,        ///< 已停止（不可重启）
 };
 
@@ -91,6 +94,11 @@ struct SDKConfig {
     // ---- 同步参数 ----
     double sync_threshold_ms   = 30.0;   ///< 同步告警阈值（ms）
     double max_drift_ms        = 100.0;  ///< 严重偏移丢帧阈值（ms）
+    double av_match_threshold_ms = 40.0; ///< Audio/video match threshold (ms)
+
+    // ---- Mel window parameters ----
+    int    mel_window_frames   = 16;     ///< Wav2Lip Mel window length
+    int    mel_context_frames  = 300;    ///< Rolling Mel normalization context
 
     // ---- 性能开关 ----
     bool   enable_frame_pacing = true;   ///< 渲染帧间隔调节
@@ -109,11 +117,26 @@ struct SDKConfig {
     // ---- 超时 ----
     int    pop_timeout_ms       = 100;   ///< 队列弹出超时（ms）
     int    shutdown_timeout_ms  = 2000;  ///< 关闭超时（ms）
+
+    // ---- 文件处理流量控制 ----
+    int    file_audio_lead_ms   = 300;   ///< ProcessFile 中音频最多领先已提交视频的时长（ms）
+    int    file_stall_timeout_ms = 30000; ///< ProcessFile 无输出进展超时（ms）
 };
 
 // ============================================================================
 // 运行时指标
 // ============================================================================
+
+/// @brief SDK 可观测队列深度
+struct SDKQueueDepths {
+    int64_t audio_raw        = 0;
+    int64_t mel_features     = 0;
+    int64_t video_raw        = 0;
+    int64_t processed_faces  = 0;
+    int64_t inference_tasks  = 0;
+    int64_t inference_output = 0;
+    int64_t output_frames    = 0;
+};
 
 /// @brief SDK 运行时指标
 struct SDKMetrics {
@@ -130,6 +153,20 @@ struct SDKMetrics {
     double  avg_output_ms      = 0.0;    ///< 平均输出耗时（ms）
     double  actual_fps         = 0.0;    ///< 实际帧率
     double  drift_ms           = 0.0;    ///< 音视频偏移（ms）
+
+    int64_t lifecycle_transition_count = 0; ///< SDK 状态迁移次数
+    int64_t shutdown_attempt_count = 0;     ///< Pipeline 停止尝试次数
+    int64_t shutdown_timeout_count = 0;     ///< Pipeline 停止超时次数
+    double  last_shutdown_ms = 0.0;         ///< 最近一次停止耗时
+    double  max_shutdown_ms = 0.0;          ///< 最大停止耗时
+
+    int64_t av_match_count = 0;             ///< 音视频匹配尝试次数
+    int64_t av_match_miss_count = 0;        ///< 超出匹配阈值次数
+    double  avg_av_match_error_ms = 0.0;    ///< 平均匹配误差
+    double  max_av_match_error_ms = 0.0;    ///< 最大匹配误差
+
+    SDKQueueDepths queue_depths;             ///< 当前队列深度
+    SDKQueueDepths queue_peak_depths;        ///< 历史峰值队列深度
 };
 
 // ============================================================================
@@ -227,7 +264,7 @@ public:
     /// @brief 加载 Wav2Lip 推理模型（Init 后可单独调用，覆盖 Init 时的加载）
     SDKError LoadLipSyncModel(const std::string& model_dir);
 
-    /// @brief 加载人脸检测+关键点模型
+    /// @brief 同步加载并验证人脸检测+关键点模型（须在 Start 前调用）
     SDKError LoadFaceModel(const std::string& model_dir);
 
     /// @brief 启用/关闭 GPU 推理（须在 Start 前调用）

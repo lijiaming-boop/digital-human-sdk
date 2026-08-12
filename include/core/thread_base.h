@@ -2,8 +2,10 @@
 
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <functional>
 #include <iostream>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <utility>
@@ -74,24 +76,33 @@ public:
      * @return false 线程已在运行
      */
     bool Start() {
+        std::lock_guard<std::mutex> join_lock(join_mutex_);
+
         ThreadState expected = ThreadState::INIT;
         if (!state_.compare_exchange_strong(expected, ThreadState::RUNNING)) {
             return false;
         }
 
-        thread_ = std::thread([this]() {
-            try {
-                Run();
-            } catch (const std::exception& e) {
-                LogError(std::string("未捕获异常: ") + e.what());
-                state_.store(ThreadState::ERROR, std::memory_order_release);
-            } catch (...) {
-                LogError("未捕获未知异常");
-                state_.store(ThreadState::ERROR, std::memory_order_release);
-            }
-            // 标记 Run() 已退出，供 Wait(timeout) 轮询使用
-            run_exited_.store(true, std::memory_order_release);
-        });
+        run_exited_.store(false, std::memory_order_release);
+        try {
+            thread_ = std::thread([this]() {
+                try {
+                    Run();
+                } catch (const std::exception& e) {
+                    LogError(std::string("Unhandled exception: ") + e.what());
+                    state_.store(ThreadState::ERROR, std::memory_order_release);
+                } catch (...) {
+                    LogError("Unhandled unknown exception");
+                    state_.store(ThreadState::ERROR, std::memory_order_release);
+                }
+
+                run_exited_.store(true, std::memory_order_release);
+                run_exited_cv_.notify_all();
+            });
+        } catch (...) {
+            state_.store(ThreadState::ERROR, std::memory_order_release);
+            throw;
+        }
 
         return true;
     }
@@ -117,7 +128,7 @@ public:
      *
      * 超时语义：
      *   - timeout_ms < 0：无限等待，直接 join()。
-     *   - timeout_ms >= 0：在线程状态达到 STOPPED/ERROR 之前轮询，超时返回 false。
+     *   - timeout_ms >= 0：使用条件变量等待 Run() 退出，超时返回 false。
      *     不会 detach 线程（避免对同一 std::thread 对象并发操作导致的 UB），
      *     超时后线程仍由本对象持有，下一次 Wait() 或析构函数会重新尝试回收。
      *
@@ -126,45 +137,46 @@ public:
      * @return false 超时（线程仍在运行，需稍后再次调用 Wait() 或由析构回收）
      */
     bool Wait(int timeout_ms = -1) {
+        // std::thread::join() is not safe to call concurrently. Serialize Wait
+        // so only one caller can inspect and consume the joinable state.
+        std::lock_guard<std::mutex> join_lock(join_mutex_);
+
         if (!thread_.joinable()) {
             FinalizeState();
             return true;
         }
 
         if (timeout_ms < 0) {
-            // 无限等待：直接 join()，安全且无 UB
+            // Destruction must eventually join; never detach an owned worker.
             thread_.join();
             FinalizeState();
             return true;
         }
 
-        // 有限超时：轮询 run_exited_ 标志（由线程在 Run() 退出时设置），
-        // 避免对同一 std::thread 对象并发操作（旧实现的 std::async+detach UB）。
-        // 不再依赖 state_ 来判断 Run() 是否退出，因为 state_ 是由本函数
-        // 调用 FinalizeState() 才会推进到 STOPPED，存在循环依赖。
-        auto deadline = std::chrono::steady_clock::now()
-                      + std::chrono::milliseconds(timeout_ms);
+        const auto deadline = std::chrono::steady_clock::now()
+                            + std::chrono::milliseconds(timeout_ms);
+        std::unique_lock<std::mutex> exited_lock(run_exited_mutex_);
+        const bool exited = run_exited_cv_.wait_until(
+            exited_lock,
+            deadline,
+            [this]() {
+                return run_exited_.load(std::memory_order_acquire);
+            });
+        exited_lock.unlock();
 
-        while (true) {
-            if (run_exited_.load(std::memory_order_acquire)) {
-                // Run() 已退出，join() 不会阻塞，安全调用
-                thread_.join();
-                FinalizeState();
-                return true;
-            }
-            // 检查是否超时
-            if (std::chrono::steady_clock::now() >= deadline) {
-                auto s = state_.load(std::memory_order_acquire);
-                std::cerr << "[ThreadBase] Wait 超时 (" << timeout_ms
-                          << "ms), 线程仍在运行 (state="
-                          << ThreadStateToString(s)
-                          << "), 不会 detach，请检查 Run() 是否响应 IsStopping()"
-                          << std::endl;
-                return false;
-            }
-            // 短睡避免 CPU 空转
-            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        if (!exited) {
+            const auto s = state_.load(std::memory_order_acquire);
+            std::cerr << "[ThreadBase] Wait timed out (" << timeout_ms
+                      << "ms), worker is still running (state="
+                      << ThreadStateToString(s)
+                      << "), thread remains owned; retry Wait() later" << std::endl;
+            return false;
         }
+
+        // run_exited_ is published, so join only reclaims thread resources.
+        thread_.join();
+        FinalizeState();
+        return true;
     }
 
     /**
@@ -246,9 +258,12 @@ private:
     std::string              name_;
     std::thread              thread_;
     std::atomic<ThreadState> state_{ThreadState::INIT};
-    /// 由线程自身在 Run() 退出时设置，供 Wait(timeout) 轮询使用，
+    /// 由线程自身在 Run() 退出时设置，供 Wait(timeout) 条件等待使用，
     /// 避免依赖 state_（state_ 由 FinalizeState 推进，存在循环依赖）。
     std::atomic<bool>        run_exited_{false};
+    mutable std::mutex       join_mutex_;
+    mutable std::mutex       run_exited_mutex_;
+    std::condition_variable  run_exited_cv_;
 };
 
 }  // namespace core

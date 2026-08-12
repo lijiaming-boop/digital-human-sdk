@@ -484,3 +484,236 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/lip_sync_response_test.cpp")
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     )
 endif()
+
+# 统一 SDK 文件接口回归：使用极小队列验证音视频独立生产不会反压死锁
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/sdk_process_file_test.cpp")
+    add_executable(sdk_process_file_test sdk_process_file_test.cpp)
+    target_link_libraries(sdk_process_file_test PRIVATE digital_human_core)
+    set_target_properties(sdk_process_file_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
+# 统一 SDK 模型错误传播：不依赖真实模型即可验证错误码与错误消息
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/sdk_model_error_test.cpp")
+    add_executable(sdk_model_error_test sdk_model_error_test.cpp)
+    target_link_libraries(sdk_model_error_test PRIVATE digital_human_core)
+    set_target_properties(sdk_model_error_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
+# 对话模块闭环：Fake 文本服务 + Fake TTS + 录制媒体 Sink，不依赖模型文件。
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/dialog_module_test.cpp")
+    add_executable(dialog_module_test dialog_module_test.cpp)
+    target_link_libraries(dialog_module_test PRIVATE digital_human_core)
+    set_target_properties(dialog_module_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+    if(BUILD_TESTING)
+        add_test(
+            NAME dialog_module
+            COMMAND dialog_module_test
+        )
+    endif()
+endif()
+
+# 真实 HTTP 适配器冒烟测试；运行时传入本地 mock/实际服务 URL。
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/http_service_client_test.cpp")
+    add_executable(http_service_client_test http_service_client_test.cpp)
+    target_link_libraries(http_service_client_test PRIVATE digital_human_core)
+    set_target_properties(http_service_client_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
+# llama.cpp OpenAI-compatible /v1/chat/completions live/mock service test.
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp_client_test.cpp")
+    add_executable(llama_cpp_client_test llama_cpp_client_test.cpp)
+    target_link_libraries(llama_cpp_client_test PRIVATE digital_human_core)
+    set_target_properties(llama_cpp_client_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
+# 真实 llama.cpp + HTTP TTS + Wav2Lip + H.264/AAC + 文件/网络发布闭环。
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/full_conversation_chain_test.cpp")
+    add_executable(full_conversation_chain_test
+        full_conversation_chain_test.cpp)
+    target_link_libraries(full_conversation_chain_test
+        PRIVATE digital_human_core)
+    set_target_properties(full_conversation_chain_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
+# 使用真实模型验证会话控制器到 SDK 输出帧的端到端闭环。
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/conversation_sdk_integration_test.cpp")
+    add_executable(conversation_sdk_integration_test
+        conversation_sdk_integration_test.cpp)
+    target_link_libraries(conversation_sdk_integration_test
+        PRIVATE digital_human_core)
+    set_target_properties(conversation_sdk_integration_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
+# 媒体发布层：BGR/PCM 编码为 H.264/AAC 并复用到本地 FLV。
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/stream_publisher_test.cpp")
+    add_executable(stream_publisher_test stream_publisher_test.cpp)
+    target_link_libraries(stream_publisher_test PRIVATE digital_human_core)
+    set_target_properties(stream_publisher_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
+# 文本→TTS→真实数字人→H.264/AAC→FLV 的完整发布闭环。
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/conversation_stream_integration_test.cpp")
+    add_executable(conversation_stream_integration_test
+        conversation_stream_integration_test.cpp)
+    target_link_libraries(conversation_stream_integration_test
+        PRIVATE digital_human_core)
+    set_target_properties(conversation_stream_integration_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
+# 需要外部监听服务的 RTMP/RTSP 网络发布冒烟测试。
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/stream_network_publish_test.cpp")
+    add_executable(stream_network_publish_test
+        stream_network_publish_test.cpp)
+    target_link_libraries(stream_network_publish_test PRIVATE digital_human_core)
+    set_target_properties(stream_network_publish_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+# Phase 1 lifecycle, shutdown, and configuration validation regression test.
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/lifecycle_safety_test.cpp")
+    add_executable(lifecycle_safety_test lifecycle_safety_test.cpp)
+    target_link_libraries(lifecycle_safety_test PRIVATE digital_human_core)
+    set_target_properties(lifecycle_safety_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+    if(BUILD_TESTING)
+        add_test(
+            NAME lifecycle_safety
+            COMMAND lifecycle_safety_test
+        )
+    endif()
+endif()
+
+
+# Uploaded avatar decoding, validation, ownership, and hot-update regression test.
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/avatar_upload_test.cpp")
+    add_executable(avatar_upload_test avatar_upload_test.cpp)
+    target_link_libraries(avatar_upload_test PRIVATE digital_human_core)
+    set_target_properties(avatar_upload_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+    if(BUILD_TESTING)
+        add_test(
+            NAME avatar_upload
+            COMMAND avatar_upload_test
+        )
+    endif()
+endif()
+
+
+# Persistent multi-turn real conversation with uploaded avatar hot replacement.
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/realtime_avatar_conversation.cpp")
+    add_executable(realtime_avatar_conversation
+        realtime_avatar_conversation.cpp)
+    target_link_libraries(realtime_avatar_conversation PRIVATE digital_human_core)
+    set_target_properties(realtime_avatar_conversation PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
+############################## CTest 注册与标签分层
+# 目标（P0 测试体系）：所有无外部依赖的测试注册到 CTest，并按 unit / integration /
+# model / network / visual / perf 分层，使 CI 能按 label 选择性执行。
+#   - unit        : 纯逻辑/合成数据，无模型、无网络、无音频设备
+#   - integration : pipeline/编码/文件 IO 集成，可能依赖 assets 但不依赖真实模型
+#   - model       : 需要真实 Wav2Lip / 人脸模型文件
+#   - network     : 需要外部 HTTP / RTMP / RTSP 服务
+#   - perf        : 性能基准，长耗时
+# 已注册的测试（dialog_module / lifecycle_safety / avatar_upload）只补标签，不重复 add_test。
+if(BUILD_TESTING)
+    # 辅助函数：若 target 存在则注册到 CTest 并打标签与超时
+    function(dh_register_test target_name labels timeout_sec)
+        if(TARGET ${target_name})
+            add_test(NAME ${target_name} COMMAND ${target_name})
+            set_tests_properties(${target_name} PROPERTIES
+                LABELS "${labels}"
+                TIMEOUT "${timeout_sec}")
+        endif()
+    endfunction()
+
+    # 为已通过 add_test 注册的测试补齐标签与超时
+    set_tests_properties(dialog_module PROPERTIES LABELS "unit" TIMEOUT 60)
+    set_tests_properties(lifecycle_safety PROPERTIES LABELS "unit" TIMEOUT 60)
+    set_tests_properties(avatar_upload PROPERTIES LABELS "unit" TIMEOUT 60)
+
+    # ---- unit：纯逻辑 / 合成数据，CI 默认执行 ----
+    dh_register_test(ring_buffer_test           "unit" 30)
+    dh_register_test(frame_scheduler_test       "unit" 30)
+    dh_register_test(render_thread_test         "unit" 30)
+    dh_register_test(av_sync_test               "unit" 30)
+    dh_register_test(audio_sync_test            "unit" 30)
+    dh_register_test(preemphasis_test           "unit" 30)
+    dh_register_test(rmsnorm_test               "unit" 30)
+    dh_register_test(noise_reduction_test       "unit" 30)
+    dh_register_test(vad_test                   "unit" 30)
+    dh_register_test(audio_framer_test          "unit" 30)
+    dh_register_test(cmvn_test                  "unit" 30)
+    dh_register_test(mel_feature_test           "unit" 30)
+    dh_register_test(audio_processor_test       "unit" 30)
+    dh_register_test(offline_audio_test         "unit" 30)
+    dh_register_test(bugfix_v2_test             "unit" 30)
+    dh_register_test(bugfix_verification_test   "unit" 30)
+    dh_register_test(v1_review_fixes_test       "unit" 30)
+    dh_register_test(verify_postprocess_fix     "unit" 30)
+    dh_register_test(sdk_model_error_test       "unit" 30)
+    dh_register_test(opencv_test                "unit" 30)
+    dh_register_test(ncnn_test                  "unit" 30)
+
+    # ---- integration：pipeline / 编码 / 文件 IO，CI 可执行 ----
+    dh_register_test(pipeline_test                  "integration" 60)
+    dh_register_test(sdk_process_file_test          "integration" 60)
+    dh_register_test(stream_publisher_test          "integration" 60)
+    dh_register_test(video_output_test              "integration" 60)
+    dh_register_test(visual_output_test             "integration" 60)
+    dh_register_test(fit_test                       "integration" 60)
+    dh_register_test(ffmpeg_audio_test              "integration" 60)
+    dh_register_test(audio_loader_test              "integration" 60)
+    dh_register_test(inference_render_pipeline_test "integration" 60)
+
+    # ---- model：需要真实模型文件，nightly/manual ----
+    dh_register_test(model_loader_test             "model" 120)
+    dh_register_test(model_inferencer_test         "model" 120)
+    dh_register_test(output_processor_test         "model" 120)
+    dh_register_test(face_detector_test            "model" 120)
+    dh_register_test(face_aligner_test             "model" 120)
+    dh_register_test(face_mask_generator_test      "model" 120)
+    dh_register_test(image_load_test               "model" 120)
+    dh_register_test(landmark_test                 "model" 120)
+    dh_register_test(full_pipeline_test            "model" 120)
+    dh_register_test(inference_worker_test         "model" 120)
+    dh_register_test(lip_sync_diagnose_test        "model" 120)
+    dh_register_test(lip_sync_response_test        "model" 120)
+    dh_register_test(pipeline_lipsync_test         "model" 120)
+    dh_register_test(conversation_sdk_integration_test "model" 120)
+
+    # ---- network：需要外部 HTTP / RTMP / RTSP 服务，manual/nightly ----
+    dh_register_test(http_service_client_test             "network" 90)
+    dh_register_test(llama_cpp_client_test                "network" 90)
+    dh_register_test(stream_network_publish_test          "network" 90)
+    dh_register_test(conversation_stream_integration_test "network" 90)
+    dh_register_test(full_conversation_chain_test         "network" 120)
+
+    # ---- perf：性能基准，长耗时，单独 manual job ----
+    dh_register_test(perf_benchmark        "perf" 300)
+    dh_register_test(perf_pipeline_only    "perf" 300)
+    dh_register_test(perf_baseline_compare "perf" 300)
+    dh_register_test(perf_p1_strategy      "perf" 300)
+endif()

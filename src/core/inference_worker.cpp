@@ -403,7 +403,7 @@ InferenceWorker::InferenceWorker(const std::string& name)
     , impl_(std::make_unique<Impl>()) {}
 
 InferenceWorker::~InferenceWorker() {
-    Stop();
+    Shutdown();
 }
 
 // ============================================================================
