@@ -543,6 +543,8 @@ M3 解决正式交付，M4 解决产品入口，M5 建立生产运行和持续�
 
 ## 9. 相关文档
 
+- [P2 可靠性、质量门禁与依赖解耦实施报告](p2_implementation_report.md)
+
 - [架构总览](overview.md)
 - [第一阶段稳定性改造](phase1_stability_refactor.md)
 - [第二阶段生命周期与可观测性改造](phase2_lifecycle_observability_refactor.md)

@@ -17,7 +17,9 @@
 #include <utility>
 
 #include "core/pipeline.h"
+#ifdef DIGITAL_HUMAN_HAS_AUDIO_LOADER
 #include "audio/audio_loader.h"
+#endif
 #include "core/image_loader.h"
 
 namespace digital_human {
@@ -29,7 +31,9 @@ namespace digital_human {
 struct DigitalHumanSDK::Impl {
     // ---- 核心模块 ----
     std::unique_ptr<core::Pipeline> pipeline;
+#ifdef DIGITAL_HUMAN_HAS_AUDIO_LOADER
     audio::AudioLoader              audio_loader;
+#endif
     core::ImageLoader               image_loader;
 
     // ---- 配置缓存 ----
@@ -506,6 +510,14 @@ SDKError DigitalHumanSDK::ProcessFile(const std::string& audio_path,
         return SDKError::INVALID_INPUT;
     }
 
+#ifndef DIGITAL_HUMAN_HAS_AUDIO_LOADER
+    (void)audio_path;
+    (void)image_path;
+    impl_->SetLastError(
+        "ProcessFile: audio file loading is unavailable in this build");
+    return SDKError::AUDIO_LOAD_FAILED;
+#else
+
     // ---- 1. 加载音频文件 ----
     audio::AudioData audio_data;
     try {
@@ -721,6 +733,7 @@ SDKError DigitalHumanSDK::ProcessFile(const std::string& audio_path,
     impl_->SetLastError(result == SDKError::OK ? "" : result_error_message);
 
     return result;
+#endif
 }
 
 // ============================================================================

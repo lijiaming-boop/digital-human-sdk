@@ -9,6 +9,9 @@
 #include "core/av_sync.h"
 
 namespace digital_human {
+namespace audio {
+class IAudioPlayer;
+}
 namespace core {
 
 /// @brief 音频同步调度器配置
@@ -37,12 +40,12 @@ enum class PlaybackState {
 /**
  * @brief 音频驱动的音视频同步调度器
  *
- * 采用音频主时钟（Audio Master Clock）策略，以 PortAudio 的音频输出位置
+ * 采用音频主时钟（Audio Master Clock）策略，以音频后端的输出位置
  * 作为时间基准，驱动视频帧的调度和同步。
  *
  * 工作流程：
  *   1. 加载 PCM 音频数据
- *   2. 调用 Play() 启动音频播放（PortAudio 输出音频到扬声器）
+ *   2. 调用 Play() 启动音频播放
  *   3. 每帧调用 ScheduleFrame(frameId, videoPtsMs) 获取调度决策
  *      - 调度器内部查询 AudioPlayer 的播放位置作为音频时钟
  *      - 与视频帧 PTS 比较，计算漂移量 drift
@@ -58,6 +61,9 @@ enum class PlaybackState {
 class AudioSyncScheduler {
 public:
     AudioSyncScheduler();
+    /// Inject a playback backend. This keeps the scheduler usable when the
+    /// optional PortAudio adapter is not built.
+    explicit AudioSyncScheduler(std::unique_ptr<audio::IAudioPlayer> player);
     ~AudioSyncScheduler();
     AudioSyncScheduler(const AudioSyncScheduler&) = delete;
     AudioSyncScheduler& operator=(const AudioSyncScheduler&) = delete;

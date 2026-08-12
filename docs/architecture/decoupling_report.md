@@ -30,7 +30,7 @@
 - 抽象接口与具体实现分离，使依赖方向可被 CMake 约束
 - 可选依赖（libcurl / FFmpeg / PortAudio）按需启用
 - 保持单一 DLL/SO 部署，不破坏对外 ABI
-- 为后续 AudioPlayer 接口抽象（解锁 AUDIO_IO 可选）奠定基础
+- 通过 `IAudioPlayer` 接口和构造注入实现 AUDIO_IO 真正可选
 
 ---
 
@@ -74,9 +74,9 @@ core(SHARED facade) → 组合上述全部 + sdk_entry + conversation_stream_bri
 | OpenMP | — | 必选 | 推理与图像处理并行 |
 | FFmpeg | — | 必选 | audio_loader 属于 runtime |
 | libcurl | `DIGITAL_HUMAN_ENABLE_HTTP` | 可选 | HTTP 适配器 |
-| PortAudio | `DIGITAL_HUMAN_ENABLE_AUDIO_IO` | 必选* | *待 AudioPlayer 接口抽象后解锁为可选 |
+| PortAudio | `DIGITAL_HUMAN_ENABLE_AUDIO_IO` | 可选 | 关闭后可注入其他 `IAudioPlayer` 后端 |
 
-> *PortAudio 当前标记为必选，因为 `render_thread` 和 `audio_sync_scheduler` 直接持有 `AudioPlayer` 对象，尚未通过接口抽象解耦。关闭该选项会在配置阶段 `FATAL_ERROR` 并给出明确提示，而非产生隐晦的链接错误。这是有意的过渡状态，为后续 P2 重构留出接口抽象的入口。
+> P2 已完成 `IAudioPlayer` 抽象和构造注入；PortAudio 不再是运行时的强制依赖。
 
 ---
 
@@ -231,16 +231,11 @@ if(DIGITAL_HUMAN_ENABLE_HTTP)
 endif()
 ```
 
-PortAudio 的过渡处理（见 §2.4 说明）：
+PortAudio 的 P2 可选处理：
 
 ```cmake
 if(DIGITAL_HUMAN_ENABLE_AUDIO_IO)
     pkg_check_modules(PORTAUDIO REQUIRED portaudio-2.0)
-else()
-    message(FATAL_ERROR
-        "DIGITAL_HUMAN_ENABLE_AUDIO_IO=OFF is not yet supported: "
-        "render_thread and audio_sync_scheduler directly depend on AudioPlayer. "
-        "Future refactoring will abstract AudioPlayer behind an interface.")
 endif()
 ```
 
@@ -403,7 +398,7 @@ cmake --build build --target digital_human_core  # facade 单独构建
 | `examples/http_service_client_test.cpp` | include 修正 | 改为包含拆分后的适配器头文件 |
 | `examples/full_conversation_chain_test.cpp` | include 修正 | 同上 |
 | `examples/realtime_avatar_conversation.cpp` | include 修正 | 同上 |
-| `CMakeLists.txt` | 重写 | 新增 4 个构建选项，libcurl/PortAudio 改为可选/显式提示 |
+| `CMakeLists.txt` | 重写 | 新增 5 个构建选项，libcurl/FFmpeg/PortAudio 可按能力裁剪 |
 | `src/CMakeLists.txt` | 重写 | GLOB_RECURSE → 7 个 OBJECT 库 + 1 个 SHARED facade |
 | `examples/CMakeLists.txt` | 重写 | 辅助函数 + 条件构建 + CTest 标签分层 |
 
@@ -413,9 +408,9 @@ cmake --build build --target digital_human_core  # facade 单独构建
 
 ### 7.1 PortAudio 可选化（P2）
 
-**现状**：`DIGITAL_HUMAN_ENABLE_AUDIO_IO=OFF` 会触发 FATAL_ERROR，因为 `render_thread.cpp` 和 `audio_sync_scheduler.cpp` 直接持有 `AudioPlayer` 对象。
+**P2 更新**：该阻塞项已完成。运行时现在依赖可注入的 `IAudioPlayer`，PortAudio 实现仅位于 `dh_audio_io`；`DIGITAL_HUMAN_ENABLE_AUDIO_IO=OFF` 已通过精简构建验证。`AudioLoader` 同时拆入可选 `dh_audio_loader`，当媒体发布和文件解码都关闭时不再查找或链接 FFmpeg。
 
-**后续方案**：抽象 `IAudioPlayer` 接口，runtime 依赖接口而非具体类。具体 `PortAudioAudioPlayer` 实现归入 `dh_audio_io` 模块，由 facade 注入。完成后 AUDIO_IO 可真正可选。
+**实现方式**：`AudioSyncScheduler` 接受 `std::unique_ptr<IAudioPlayer>` 构造注入；启用 `dh_audio_io` 时仍自动创建默认 PortAudio 后端，关闭时则要求调用方注入后端。`RenderThread` 仅持有接口指针。
 
 ### 7.2 FFmpeg 依赖拆分（P2）
 
@@ -449,4 +444,4 @@ CTest 标签分层已就绪，下一步应在 CI 中配置按 label 执行的 jo
 4. **单一 facade 部署**：对外仍是 `digital_human_core` 一个 SHARED 库，ABI 未变
 5. **测试分层**：CTest 按 unit/integration/model/network/perf 标签分层，CI 可选择性执行
 
-重构为后续 P2 工作（AudioPlayer 接口抽象、FFmpeg 依赖拆分）奠定了清晰的模块边界和 CMake 入口。
+P2 已在该模块边界上完成 AudioPlayer 接口抽象和 FFmpeg 音频加载拆分；后续重点转为真实网络、硬件矩阵和长稳验收。

@@ -29,6 +29,7 @@ public:
         in_voice_ = false;
         voice_frame_count_ = 0;
         silence_frame_count_ = 0;
+        residual_count_ = 0;
         return true;
     }
 

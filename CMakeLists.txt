@@ -35,6 +35,20 @@ option(DIGITAL_HUMAN_ENABLE_MEDIA
     "Build H.264/AAC encoding and stream publishing (requires FFmpeg)" ON)
 option(DIGITAL_HUMAN_ENABLE_AUDIO_IO
     "Build local audio playback (requires PortAudio)" ON)
+option(DIGITAL_HUMAN_ENABLE_AUDIO_LOADER
+    "Build FFmpeg-backed audio file loading" ON)
+option(DIGITAL_HUMAN_ENABLE_COVERAGE
+    "Instrument GCC/Clang builds for gcov-compatible code coverage" OFF)
+
+if(DIGITAL_HUMAN_ENABLE_COVERAGE)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        add_compile_options(-O0 -g --coverage)
+        add_link_options(--coverage)
+    else()
+        message(FATAL_ERROR
+            "DIGITAL_HUMAN_ENABLE_COVERAGE requires GCC or Clang")
+    endif()
+endif()
 
 ############################## 必需依赖
 # OpenMP — 运行时核心推理与图像处理并行
@@ -67,20 +81,24 @@ endif()
 message(STATUS ">> ncnn Found")
 
 # PkgConfig — 用于 FFmpeg / libcurl / PortAudio
-find_package(PkgConfig REQUIRED)
+if(DIGITAL_HUMAN_ENABLE_HTTP OR DIGITAL_HUMAN_ENABLE_MEDIA
+   OR DIGITAL_HUMAN_ENABLE_AUDIO_IO OR DIGITAL_HUMAN_ENABLE_AUDIO_LOADER)
+    find_package(PkgConfig REQUIRED)
+endif()
 
 ############################## 可选依赖
-# FFmpeg — 音频加载 + 媒体编码发布
-# 音频加载 (audio_loader) 是运行时核心的一部分，因此即使不启用 MEDIA，
-# 运行时仍需要 FFmpeg。MEDIA 启用时额外用于 stream_publisher。
-pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET
-    libavformat
-    libavcodec
-    libavutil
-    libswresample
-    libswscale
-)
-message(STATUS ">> FFMPEG Found: ${FFMPEG_VERSION}")
+# FFmpeg — 可选音频文件解码 + 可选媒体编码发布。
+# 纯流式推理同时关闭这两个适配器时不需要 FFmpeg。
+if(DIGITAL_HUMAN_ENABLE_MEDIA OR DIGITAL_HUMAN_ENABLE_AUDIO_LOADER)
+    pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET
+        libavformat
+        libavcodec
+        libavutil
+        libswresample
+        libswscale
+    )
+    message(STATUS ">> FFMPEG Found: ${FFMPEG_VERSION}")
+endif()
 
 # libcurl — HTTP 文本生成 / TTS 适配
 if(DIGITAL_HUMAN_ENABLE_HTTP)
@@ -101,11 +119,6 @@ endif()
 if(DIGITAL_HUMAN_ENABLE_AUDIO_IO)
     pkg_check_modules(PORTAUDIO REQUIRED portaudio-2.0)
     message(STATUS ">> PortAudio Found: ${PORTAUDIO_VERSION}")
-else()
-    message(FATAL_ERROR
-        "DIGITAL_HUMAN_ENABLE_AUDIO_IO=OFF is not yet supported: "
-        "render_thread and audio_sync_scheduler directly depend on AudioPlayer. "
-        "Future refactoring will abstract AudioPlayer behind an interface.")
 endif()
 
 message(STATUS "OpenCV library status:")
@@ -116,6 +129,9 @@ message(STATUS "OpenCV include path: ${OpenCV_INCLUDE_DIRS}")
 add_subdirectory(src)
 if(BUILD_EXAMPLES)
     add_subdirectory(examples)
+endif()
+if(BUILD_TESTING)
+    add_subdirectory(tests)
 endif()
 
 ############################## CMake package export

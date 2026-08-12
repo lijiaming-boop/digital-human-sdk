@@ -12,7 +12,7 @@
 
 namespace digital_human {
 namespace audio {
-class AudioPlayer;
+class IAudioPlayer;
 }
 namespace model {
 class OutputProcessor;
@@ -105,7 +105,7 @@ public:
     void SetOutputProcessor(model::OutputProcessor* processor);
 
     /// @brief 设置 AudioPlayer（用于音频同步时钟，可选）
-    void SetAudioPlayer(audio::AudioPlayer* player);
+    void SetAudioPlayer(audio::IAudioPlayer* player);
 
     // ========================================================================
     // 队列

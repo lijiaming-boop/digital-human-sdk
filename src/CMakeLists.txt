@@ -9,7 +9,8 @@
 #   http    → dialog + network + libcurl   [HTTP 适配器]
 #   media   → FFmpeg                       [编码发布]
 #   audio_io→ PortAudio                    [本机音频播放]
-#   runtime → OpenCV + ncnn + OpenMP + FFmpeg [Pipeline + 模型 + 音频处理]
+#   loader  → FFmpeg                       [可选音频文件解码]
+#   runtime → OpenCV + ncnn + OpenMP       [Pipeline + 模型 + 音频处理]
 #   core(SHARED facade) → 组合上述全部 + sdk_entry + conversation_stream_bridge
 
 # 公共 include 路径：所有模块都需要项目根 include/
@@ -93,6 +94,16 @@ if(DIGITAL_HUMAN_ENABLE_AUDIO_IO)
     target_link_libraries(dh_audio_io PUBLIC ${PORTAUDIO_LIBRARIES})
 endif()
 
+# Optional FFmpeg-backed audio file decoder. Keeping this adapter separate
+# allows pure streaming/inference deployments to omit FFmpeg entirely.
+if(DIGITAL_HUMAN_ENABLE_AUDIO_LOADER)
+    add_library(dh_audio_loader STATIC
+        audio/audio_loader.cpp
+    )
+    target_include_directories(dh_audio_loader PUBLIC ${DH_INCLUDE_DIR})
+    target_link_libraries(dh_audio_loader PRIVATE PkgConfig::FFMPEG)
+endif()
+
 #----------------------------------------------------------------------
 # digital_human_runtime — Pipeline、模型推理、同步、渲染和音频处理
 #----------------------------------------------------------------------
@@ -100,7 +111,6 @@ add_library(dh_runtime STATIC
     # audio processing (不含 audio_player，该文件属于 audio_io)
     audio/audio_cmvn.cpp
     audio/audio_framer.cpp
-    audio/audio_loader.cpp
     audio/audio_mel_feature_extract.cpp
     audio/audio_noise_reduction.cpp
     audio/audio_preemphasis.cpp
@@ -129,17 +139,20 @@ add_library(dh_runtime STATIC
     # P1: logger + metrics 基础设施
     core/logger.cpp
     core/log_context.cpp
+    core/media_clock.cpp
     core/metrics.cpp
+    core/quality_gate.cpp
 )
 target_include_directories(dh_runtime PUBLIC ${DH_INCLUDE_DIR})
 target_include_directories(dh_runtime PRIVATE ${PROJECT_SOURCE_DIR}/src)
 target_link_libraries(dh_runtime
-    PUBLIC ${OpenCV_LIBS} ncnn OpenMP::OpenMP_CXX PkgConfig::FFMPEG)
+    PUBLIC ${OpenCV_LIBS} ncnn OpenMP::OpenMP_CXX)
 if(NCNN_VULKAN)
     target_link_libraries(dh_runtime PUBLIC Vulkan::Vulkan)
 endif()
 if(TARGET dh_audio_io)
     target_link_libraries(dh_runtime PUBLIC dh_audio_io)
+    target_compile_definitions(dh_runtime PRIVATE DIGITAL_HUMAN_HAS_AUDIO_IO=1)
 endif()
 
 #----------------------------------------------------------------------
@@ -163,11 +176,16 @@ target_include_directories(digital_human_core PUBLIC
 # 编译 facade 时定义导出宏
 target_compile_definitions(digital_human_core PRIVATE DIGITAL_HUMAN_CORE_EXPORTS)
 set(DH_EXPORT_IMPLEMENTATION_TARGETS dh_runtime dh_avatar dh_dialog)
-foreach(optional_target dh_http dh_network dh_media dh_audio_io)
+foreach(optional_target dh_http dh_network dh_media dh_audio_io dh_audio_loader)
     if(TARGET ${optional_target})
         list(APPEND DH_EXPORT_IMPLEMENTATION_TARGETS ${optional_target})
     endif()
 endforeach()
+
+if(TARGET dh_audio_loader)
+    target_compile_definitions(digital_human_core PRIVATE
+        DIGITAL_HUMAN_HAS_AUDIO_LOADER=1)
+endif()
 foreach(implementation_target IN LISTS DH_EXPORT_IMPLEMENTATION_TARGETS)
     target_compile_definitions(${implementation_target}
         PRIVATE DIGITAL_HUMAN_CORE_EXPORTS)

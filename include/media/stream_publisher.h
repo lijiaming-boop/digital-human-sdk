@@ -20,6 +20,12 @@ enum class StreamProtocol {
     FILE,
 };
 
+enum class ReconnectAudioPolicy {
+    DROP,
+    RETAIN,
+    FAIL_SESSION,
+};
+
 struct StreamPublisherConfig {
     std::string url;
     StreamProtocol protocol = StreamProtocol::AUTO;
@@ -41,12 +47,26 @@ struct StreamPublisherConfig {
 
     size_t max_video_queue = 12;
     size_t max_audio_queue = 64;
+    /// Drop queued video when its real PTS latency exceeds this bound.
+    int max_video_queue_latency_ms = 500;
     int io_timeout_ms = 5000;
     /// 音频 PushAudio 在队列满时的最长等待毫秒数（P0 停止语义）。
     /// 超过该时间仍无法入队视为慢消费者不可恢复，置 failed 并返回 false，
     /// 避免会话停止时无限阻塞。0 表示不等待（立即失败）。
     int max_audio_push_wait_ms = 30000;
     bool rtsp_tcp = true;
+
+    bool enable_reconnect = true;
+    int reconnect_initial_backoff_ms = 250;
+    int reconnect_max_backoff_ms = 4000;
+    int reconnect_window_ms = 30000;
+    ReconnectAudioPolicy reconnect_audio_policy =
+        ReconnectAudioPolicy::RETAIN;
+    int max_retained_audio_ms = 2000;
+
+    /// Deterministic fault injection for storage/network error tests.
+    /// Negative disables it; zero fails before the first muxed packet.
+    int64_t debug_fail_after_packets = -1;
 };
 
 struct StreamPublisherMetrics {
@@ -56,6 +76,12 @@ struct StreamPublisherMetrics {
     int64_t audio_samples_in = 0;
     int64_t audio_frames_encoded = 0;
     int64_t packets_written = 0;
+    int64_t reconnect_attempts = 0;
+    int64_t reconnect_successes = 0;
+    int64_t reconnect_failures = 0;
+    int64_t max_video_queue_latency_ms = 0;
+    std::string selected_video_encoder;
+    bool hardware_video_encoder = false;
 };
 
 /// Thread-safe BGR/PCM encoder and muxer.

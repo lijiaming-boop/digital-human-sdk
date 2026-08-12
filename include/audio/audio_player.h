@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 namespace digital_human {
@@ -14,6 +15,36 @@ enum class AudioPlayerState {
     PAUSED,     ///< 已暂停
     STOPPED,    ///< 已停止
     FINISHED    ///< 播放完毕
+};
+
+/// Audio output abstraction used by the runtime. Implementations may use
+/// PortAudio, a platform-native backend, or a deterministic test clock.
+class IAudioPlayer {
+public:
+    virtual ~IAudioPlayer() = default;
+
+    virtual bool Init(int sampleRate = 48000, int channels = 2,
+                      int framesPerBuffer = 512) = 0;
+    virtual void Destroy() = 0;
+    virtual bool IsInitialized() const = 0;
+    virtual bool LoadAudio(const float* samples, int numSamples,
+                           int channels) = 0;
+    virtual bool LoadAudio(const std::vector<float>& samples,
+                           int channels) = 0;
+    virtual bool Play() = 0;
+    virtual bool Pause() = 0;
+    virtual bool Resume() = 0;
+    virtual bool Stop() = 0;
+    virtual AudioPlayerState GetState() const = 0;
+    virtual bool IsPlaying() const = 0;
+    virtual bool IsPaused() const = 0;
+    virtual bool IsStopped() const = 0;
+    virtual bool IsFinished() const = 0;
+    virtual int64_t GetConsumedFrames() const = 0;
+    virtual double GetPlaybackPositionMs() const = 0;
+    virtual double GetDacTimeMs() const = 0;
+    virtual double GetTotalDurationMs() const = 0;
+    virtual std::string GetLastErrorMsg() const = 0;
 };
 
 /**
@@ -29,10 +60,10 @@ enum class AudioPlayerState {
  *
  * 线程安全：PortAudio 回调在独立音频线程运行，通过原子变量保护共享状态。
  */
-class AudioPlayer {
+class AudioPlayer final : public IAudioPlayer {
 public:
     AudioPlayer();
-    ~AudioPlayer();
+    ~AudioPlayer() override;
     AudioPlayer(const AudioPlayer&) = delete;
     AudioPlayer& operator=(const AudioPlayer&) = delete;
     AudioPlayer(AudioPlayer&&) noexcept;

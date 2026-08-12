@@ -16,7 +16,7 @@
 namespace digital_human {
 namespace core {
 
-using audio::AudioPlayer;
+using audio::IAudioPlayer;
 using model::OutputProcessor;
 
 // ============================================================================
@@ -48,7 +48,7 @@ struct RenderThread::Impl {
 
     // ---- 外部模块 ----
     OutputProcessor*               output_processor_ = nullptr;
-    AudioPlayer*                   audio_player_     = nullptr;
+    IAudioPlayer*                  audio_player_     = nullptr;
 
     // ---- 队列 ----
     ThreadSafeQueue<InferenceOutputPacket>* input_queue_  = nullptr;
@@ -251,7 +251,7 @@ void RenderThread::SetOutputProcessor(OutputProcessor* processor) {
     impl_->output_processor_ = processor;
 }
 
-void RenderThread::SetAudioPlayer(AudioPlayer* player) {
+void RenderThread::SetAudioPlayer(IAudioPlayer* player) {
     impl_->audio_player_ = player;
 }
 

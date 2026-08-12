@@ -12,6 +12,8 @@
 
 #include <opencv2/imgproc.hpp>
 
+#include "digital_human/metrics.h"
+
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
@@ -79,6 +81,21 @@ bool SupportsPixelFormat(const AVCodec* codec, AVPixelFormat wanted) {
     }
     return false;
 #endif
+}
+
+bool IsHardwareEncoder(const std::string& name) {
+    return name.find("nvenc") != std::string::npos
+        || name.find("qsv") != std::string::npos
+        || name.find("amf") != std::string::npos
+        || name.find("vaapi") != std::string::npos
+        || name.find("videotoolbox") != std::string::npos;
+}
+
+void UpdateAtomicMax(std::atomic<int64_t>& target, int64_t value) {
+    int64_t current = target.load(std::memory_order_relaxed);
+    while (value > current
+           && !target.compare_exchange_weak(
+               current, value, std::memory_order_relaxed)) {}
 }
 
 AVSampleFormat SelectSampleFormat(const AVCodec* codec) {
@@ -154,7 +171,10 @@ struct StreamPublisher::Impl {
     bool opened = false;
     bool closing = false;
     bool failed = false;
+    bool reconnecting = false;
     std::string last_error;
+    std::string selected_video_encoder;
+    bool hardware_video_encoder = false;
 
     AVFormatContext* format_context = nullptr;
     AVCodecContext* video_context = nullptr;
@@ -176,6 +196,10 @@ struct StreamPublisher::Impl {
     std::atomic<int64_t> audio_samples_in{0};
     std::atomic<int64_t> audio_frames_encoded{0};
     std::atomic<int64_t> packets_written{0};
+    std::atomic<int64_t> reconnect_attempts{0};
+    std::atomic<int64_t> reconnect_successes{0};
+    std::atomic<int64_t> reconnect_failures{0};
+    std::atomic<int64_t> max_video_queue_latency_ms{0};
     std::atomic<int64_t> io_deadline_us{0};
 
     static int InterruptIo(void* opaque) {
@@ -213,6 +237,12 @@ struct StreamPublisher::Impl {
         std::vector<std::string> candidates;
         if (!config.video_encoder.empty()) {
             candidates.push_back(config.video_encoder);
+            if (config.video_encoder != "libx264") {
+                candidates.push_back("libx264");
+            }
+            if (config.video_encoder != "h264") {
+                candidates.push_back("h264");
+            }
         } else {
             candidates = {"h264_nvenc", "h264_qsv", "h264_amf",
                           "libx264", "h264"};
@@ -249,6 +279,9 @@ struct StreamPublisher::Impl {
             av_dict_free(&options);
             if (result >= 0) {
                 video_context = candidate;
+                std::lock_guard<std::mutex> lock(mutex);
+                selected_video_encoder = name;
+                hardware_video_encoder = IsHardwareEncoder(name);
                 break;
             }
             attempts += name + "=" + AvError(result) + "; ";
@@ -389,7 +422,9 @@ struct StreamPublisher::Impl {
 
     bool Initialize(std::string& error) {
         EnsureNetworkInitialized();
-        protocol = ResolveProtocol(config);
+        last_video_pts = AV_NOPTS_VALUE;
+        audio_next_pts = 0;
+        audio_pts_initialized = false;
         const int alloc_result = avformat_alloc_output_context2(
             &format_context, nullptr, FormatName(protocol), config.url.c_str());
         if (alloc_result < 0 || !format_context) {
@@ -460,6 +495,14 @@ struct StreamPublisher::Impl {
             av_packet_rescale_ts(packet, codec_context->time_base,
                                  stream->time_base);
             packet->stream_index = stream->index;
+            if (config.debug_fail_after_packets >= 0
+                && packets_written.load(std::memory_order_relaxed)
+                    >= config.debug_fail_after_packets) {
+                error = "write muxed packet: simulated ENOSPC";
+                av_packet_unref(packet);
+                av_packet_free(&packet);
+                return false;
+            }
             ArmIoTimeout();
             const int write_result = av_interleaved_write_frame(
                 format_context, packet);
@@ -471,8 +514,10 @@ struct StreamPublisher::Impl {
                 return false;
             }
             packets_written.fetch_add(1, std::memory_order_relaxed);
+            MetricsRegistry::instance().record_publisher_packet();
             if (video) {
                 video_frames_encoded.fetch_add(1, std::memory_order_relaxed);
+                MetricsRegistry::instance().record_publisher_frame_encoded();
             } else {
                 audio_frames_encoded.fetch_add(1, std::memory_order_relaxed);
             }
@@ -619,6 +664,95 @@ struct StreamPublisher::Impl {
         return EncodeAudioFrames(false, error);
     }
 
+    bool TryReconnect(const std::string& cause) {
+        if (!config.enable_reconnect
+            || (protocol != StreamProtocol::RTMP
+                && protocol != StreamProtocol::RTSP)
+            || config.reconnect_audio_policy
+                == ReconnectAudioPolicy::FAIL_SESSION) {
+            return false;
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            if (closing) return false;
+            reconnecting = true;
+            last_error = "reconnecting after: " + cause;
+
+            // Raw video is disposable during reconnect. Preserve only the
+            // freshest frame so recovery does not replay stale mouth motion.
+            if (video_queue.size() > 1) {
+                const auto dropped = static_cast<int64_t>(
+                    video_queue.size() - 1);
+                VideoItem latest = std::move(video_queue.back());
+                video_queue.clear();
+                video_queue.push_back(std::move(latest));
+                video_frames_dropped.fetch_add(
+                    dropped, std::memory_order_relaxed);
+                for (int64_t i = 0; i < dropped; ++i) {
+                    MetricsRegistry::instance().record_publisher_frame_dropped();
+                }
+            }
+            if (config.reconnect_audio_policy == ReconnectAudioPolicy::DROP) {
+                audio_queue.clear();
+            } else if (config.max_retained_audio_ms >= 0
+                       && !audio_queue.empty()) {
+                const int64_t newest_pts = audio_queue.back().pts_ms;
+                while (!audio_queue.empty()
+                       && newest_pts - audio_queue.front().pts_ms
+                           > config.max_retained_audio_ms) {
+                    audio_queue.pop_front();
+                }
+            }
+        }
+        cv.notify_all();
+
+        Cleanup();
+        const auto started = std::chrono::steady_clock::now();
+        int backoff_ms = std::max(0, config.reconnect_initial_backoff_ms);
+        std::string reconnect_error = cause;
+
+        while (true) {
+            {
+                std::unique_lock<std::mutex> lock(mutex);
+                if (cv.wait_for(lock, std::chrono::milliseconds(backoff_ms),
+                                [&]() { return closing; })) {
+                    reconnecting = false;
+                    return false;
+                }
+            }
+
+            const auto elapsed_ms =
+                std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now() - started).count();
+            if (elapsed_ms > config.reconnect_window_ms) break;
+
+            reconnect_attempts.fetch_add(1, std::memory_order_relaxed);
+            MetricsRegistry::instance().record_publisher_reconnect();
+            if (Initialize(reconnect_error)) {
+                reconnect_successes.fetch_add(1, std::memory_order_relaxed);
+                std::lock_guard<std::mutex> lock(mutex);
+                reconnecting = false;
+                last_error.clear();
+                return true;
+            }
+            Cleanup();
+            if (backoff_ms == 0) {
+                backoff_ms = 1;
+            } else {
+                backoff_ms = std::min(
+                    config.reconnect_max_backoff_ms, backoff_ms * 2);
+            }
+        }
+
+        reconnect_failures.fetch_add(1, std::memory_order_relaxed);
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            reconnecting = false;
+        }
+        return false;
+    }
+
     void Run() {
         while (true) {
             VideoItem video;
@@ -650,10 +784,15 @@ struct StreamPublisher::Impl {
             }
             cv.notify_all();
             std::string error;
+            const auto encode_started = std::chrono::steady_clock::now();
             const bool ok = use_video
                 ? EncodeVideo(video, error)
                 : EncodeAudio(audio, error);
+            MetricsRegistry::instance().record_publisher_encode_latency(
+                std::chrono::duration<double, std::milli>(
+                    std::chrono::steady_clock::now() - encode_started).count());
             if (!ok) {
+                if (TryReconnect(error)) continue;
                 SetFailure(error);
                 break;
             }
@@ -713,7 +852,13 @@ bool StreamPublisher::Open(const StreamPublisherConfig& config,
         || config.output_audio_sample_rate <= 0
         || config.input_audio_channels <= 0
         || config.output_audio_channels <= 0
-        || config.max_video_queue == 0 || config.max_audio_queue == 0) {
+        || config.max_video_queue == 0 || config.max_audio_queue == 0
+        || config.max_video_queue_latency_ms < 0
+        || config.reconnect_initial_backoff_ms < 0
+        || config.reconnect_max_backoff_ms
+            < config.reconnect_initial_backoff_ms
+        || config.reconnect_window_ms < 0
+        || config.max_retained_audio_ms < 0) {
         error = "invalid stream publisher configuration";
         return false;
     }
@@ -724,9 +869,13 @@ bool StreamPublisher::Open(const StreamPublisherConfig& config,
             return false;
         }
         impl_->config = config;
+        impl_->protocol = ResolveProtocol(config);
         impl_->closing = false;
         impl_->failed = false;
+        impl_->reconnecting = false;
         impl_->last_error.clear();
+        impl_->selected_video_encoder.clear();
+        impl_->hardware_video_encoder = false;
         impl_->video_queue.clear();
         impl_->audio_queue.clear();
         impl_->last_video_pts = AV_NOPTS_VALUE;
@@ -738,6 +887,10 @@ bool StreamPublisher::Open(const StreamPublisherConfig& config,
         impl_->audio_samples_in.store(0, std::memory_order_relaxed);
         impl_->audio_frames_encoded.store(0, std::memory_order_relaxed);
         impl_->packets_written.store(0, std::memory_order_relaxed);
+        impl_->reconnect_attempts.store(0, std::memory_order_relaxed);
+        impl_->reconnect_successes.store(0, std::memory_order_relaxed);
+        impl_->reconnect_failures.store(0, std::memory_order_relaxed);
+        impl_->max_video_queue_latency_ms.store(0, std::memory_order_relaxed);
         impl_->io_deadline_us.store(0, std::memory_order_relaxed);
     }
     if (!impl_->Initialize(error)) {
@@ -768,9 +921,23 @@ bool StreamPublisher::PushVideo(const cv::Mat& bgr_frame,
             ? "stream publisher is not accepting video" : impl_->last_error;
         return false;
     }
+    while (impl_->protocol != StreamProtocol::FILE
+           && !impl_->video_queue.empty()
+           && pts_ms >= impl_->video_queue.front().pts_ms
+           && pts_ms - impl_->video_queue.front().pts_ms
+               > impl_->config.max_video_queue_latency_ms) {
+        impl_->video_queue.pop_front();
+        impl_->video_frames_dropped.fetch_add(1, std::memory_order_relaxed);
+        MetricsRegistry::instance().record_publisher_frame_dropped();
+    }
+    if (!impl_->video_queue.empty() && pts_ms >= impl_->video_queue.front().pts_ms) {
+        UpdateAtomicMax(impl_->max_video_queue_latency_ms,
+                        pts_ms - impl_->video_queue.front().pts_ms);
+    }
     if (impl_->video_queue.size() >= impl_->config.max_video_queue) {
         impl_->video_queue.pop_front();
         impl_->video_frames_dropped.fetch_add(1, std::memory_order_relaxed);
+        MetricsRegistry::instance().record_publisher_frame_dropped();
     }
     impl_->video_queue.push_back(Impl::VideoItem{bgr_frame.clone(), pts_ms});
     impl_->video_frames_in.fetch_add(1, std::memory_order_relaxed);
@@ -819,6 +986,16 @@ bool StreamPublisher::PushAudio(const std::vector<float>& interleaved_pcm,
     }
     impl_->audio_queue.push_back(
         Impl::AudioItem{interleaved_pcm, pts_ms});
+    if (impl_->reconnecting
+        && impl_->config.reconnect_audio_policy
+            == ReconnectAudioPolicy::RETAIN) {
+        while (!impl_->audio_queue.empty()
+               && pts_ms >= impl_->audio_queue.front().pts_ms
+               && pts_ms - impl_->audio_queue.front().pts_ms
+                   > impl_->config.max_retained_audio_ms) {
+            impl_->audio_queue.pop_front();
+        }
+    }
     impl_->audio_samples_in.fetch_add(
         static_cast<int64_t>(interleaved_pcm.size()
             / static_cast<size_t>(impl_->config.input_audio_channels)),
@@ -871,6 +1048,16 @@ StreamPublisherMetrics StreamPublisher::GetMetrics() const {
     metrics.audio_samples_in = impl_->audio_samples_in.load();
     metrics.audio_frames_encoded = impl_->audio_frames_encoded.load();
     metrics.packets_written = impl_->packets_written.load();
+    metrics.reconnect_attempts = impl_->reconnect_attempts.load();
+    metrics.reconnect_successes = impl_->reconnect_successes.load();
+    metrics.reconnect_failures = impl_->reconnect_failures.load();
+    metrics.max_video_queue_latency_ms =
+        impl_->max_video_queue_latency_ms.load();
+    {
+        std::lock_guard<std::mutex> lock(impl_->mutex);
+        metrics.selected_video_encoder = impl_->selected_video_encoder;
+        metrics.hardware_video_encoder = impl_->hardware_video_encoder;
+    }
     return metrics;
 }
 
