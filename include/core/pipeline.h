@@ -60,6 +60,17 @@ struct PipelineConfig {
 // Pipeline 指标
 // ============================================================================
 
+/// @brief Pipeline 各级队列深度快照
+struct PipelineQueueDepths {
+    int64_t audio_raw       = 0;
+    int64_t mel_features    = 0;
+    int64_t video_raw       = 0;
+    int64_t processed_faces = 0;
+    int64_t inference_tasks = 0;
+    int64_t inference_output = 0;
+    int64_t output_frames   = 0;
+};
+
 /// @brief Pipeline 运行时指标
 struct PipelineMetrics {
     int64_t total_frames_in       = 0;
@@ -74,6 +85,20 @@ struct PipelineMetrics {
     double  avg_inference_ms      = 0.0;
     double  avg_output_ms         = 0.0;
     double  actual_fps            = 0.0;
+
+    int64_t lifecycle_transition_count = 0;
+    int64_t shutdown_attempt_count     = 0;
+    int64_t shutdown_timeout_count     = 0;
+    double  last_shutdown_ms           = 0.0;
+    double  max_shutdown_ms            = 0.0;
+
+    int64_t av_match_count             = 0;
+    int64_t av_match_miss_count        = 0;
+    double  avg_av_match_error_ms      = 0.0;
+    double  max_av_match_error_ms      = 0.0;
+
+    PipelineQueueDepths queue_depths;
+    PipelineQueueDepths queue_peak_depths;
 
     std::string ToString() const;
 };
@@ -144,12 +169,15 @@ public:
     bool Start();
 
     /**
-     * @brief 停止所有线程并清理资源
+     * @brief Stop all workers and release their thread resources.
      *
-     * 按从上游到下游的顺序停止线程，超时后强制终止。
-     * 可在任意时刻调用，幂等。
+     * Stop is cooperative: it does not force-terminate a blocked worker. A
+     * timeout returns false and leaves the thread owned by Pipeline so a later
+     * Stop call or destruction can continue the join operation.
      */
-    void Stop();
+    /// @return true  all workers exited before the shared deadline
+    /// @return false at least one worker is still running; Stop may be retried
+    bool Stop();
 
     /// @brief 检查 Pipeline 是否在运行
     bool IsRunning() const;
@@ -235,6 +263,13 @@ public:
     /// @brief 设置 SCRFD + 2D106 人脸模型目录（拟合图片/视频前必须调用）
     /// @param path 包含 SCRFD ncnn 模型与 2d106det.onnx 的目录
     void SetLandmarkModelPath(const std::string& path);
+
+    /// @brief 同步加载 SCRFD + 2D106 人脸模型并验证结果
+    /// @return true 加载成功；必须在 Start() 前调用
+    bool LoadFaceModel(const std::string& path);
+
+    /// @brief 人脸模型是否已成功加载
+    bool IsFaceModelLoaded() const;
 
     /// @brief 初始化内置 ModelInferencer（Wav2Lip 推理模型）
     /// @param model_dir 模型目录（含 Wav2Lip-SD-GAN-opt.param/.bin）

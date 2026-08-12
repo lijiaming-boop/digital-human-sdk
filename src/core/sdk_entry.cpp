@@ -9,6 +9,9 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
+#include <cmath>
+#include <condition_variable>
 #include <mutex>
 #include <thread>
 #include <utility>
@@ -37,7 +40,8 @@ struct DigitalHumanSDK::Impl {
 
     // ---- 状态机 ----
     std::atomic<SDKState> state{SDKState::UNINITIALIZED};
-    std::atomic<bool>     terminated{false};
+    std::atomic<int64_t> lifecycle_transition_count{0};
+    mutable std::mutex lifecycle_mutex;
 
     // ---- 最后错误 ----
     // 简单互斥保护即可，错误路径非热点
@@ -49,20 +53,171 @@ struct DigitalHumanSDK::Impl {
         last_error = msg;
     }
 
+    static bool IsTerminalState(SDKState value) {
+        return value == SDKState::STOPPING || value == SDKState::STOPPED;
+    }
+
+    void TransitionStateUnlocked(SDKState next) {
+        const SDKState previous = state.load(std::memory_order_relaxed);
+        if (previous == next) {
+            return;
+        }
+        state.store(next, std::memory_order_release);
+        lifecycle_transition_count.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    SDKError Fail(SDKError error, const std::string& message) {
+        SetLastError(message);
+        return error;
+    }
+
+    SDKError ValidateMutationUnlocked(const char* operation) {
+        if (!pipeline) {
+            return Fail(SDKError::NOT_INITIALIZED,
+                        std::string(operation) + ": Pipeline is not initialized");
+        }
+        const SDKState current = state.load(std::memory_order_acquire);
+        if (IsTerminalState(current)) {
+            return Fail(SDKError::ALREADY_TERMINATED,
+                        std::string(operation) + ": SDK is terminal");
+        }
+        if (current == SDKState::RUNNING || current == SDKState::PAUSED) {
+            return Fail(SDKError::ALREADY_RUNNING,
+                        std::string(operation) + ": SDK is running");
+        }
+        return SDKError::OK;
+    }
+
+    SDKError LoadLipSyncModelUnlocked(const std::string& model_dir) {
+        const SDKError validation = ValidateMutationUnlocked("LoadLipSyncModel");
+        if (validation != SDKError::OK) {
+            return validation;
+        }
+        if (!pipeline->InitModelInferencer(model_dir)) {
+            lipsync_model_loaded = false;
+            return Fail(SDKError::MODEL_LOAD_FAILED,
+                        "LoadLipSyncModel: failed to load model: " + model_dir);
+        }
+        lipsync_model_loaded = true;
+        SetLastError("");
+        return SDKError::OK;
+    }
+
+    SDKError LoadFaceModelUnlocked(const std::string& model_dir) {
+        const SDKError validation = ValidateMutationUnlocked("LoadFaceModel");
+        if (validation != SDKError::OK) {
+            return validation;
+        }
+        if (!pipeline->LoadFaceModel(model_dir)) {
+            face_model_loaded = false;
+            return Fail(SDKError::FACE_MODEL_LOAD_FAILED,
+                        "LoadFaceModel: failed to load SCRFD and 2D106 models: "
+                            + model_dir);
+        }
+        face_model_loaded = true;
+        SetLastError("");
+        return SDKError::OK;
+    }
+
+    SDKError EnableGPUUnlocked(bool enable) {
+        const SDKError validation = ValidateMutationUnlocked("EnableGPU");
+        if (validation != SDKError::OK) {
+            return validation;
+        }
+        if (!pipeline->EnableGPU(enable)) {
+            return Fail(enable ? SDKError::GPU_NOT_AVAILABLE : SDKError::UNKNOWN,
+                        enable
+                            ? "EnableGPU: Vulkan is unavailable or model reload failed"
+                            : "EnableGPU: failed to disable GPU");
+        }
+        gpu_enabled = enable;
+        SetLastError("");
+        return SDKError::OK;
+    }
+
+    SDKError SetInferenceThreadsUnlocked(int count) {
+        if (count < 0) {
+            return Fail(SDKError::INVALID_CONFIG,
+                        "SetInferenceThreads: thread count cannot be negative");
+        }
+        const SDKError validation = ValidateMutationUnlocked("SetInferenceThreads");
+        if (validation != SDKError::OK) {
+            return validation;
+        }
+        pipeline->SetInferenceThreads(count);
+        SetLastError("");
+        return SDKError::OK;
+    }
+
+    SDKError StartUnlocked() {
+        const SDKState current = state.load(std::memory_order_acquire);
+        if (current == SDKState::UNINITIALIZED || !pipeline) {
+            return Fail(SDKError::NOT_INITIALIZED, "Start: SDK is not initialized");
+        }
+        if (IsTerminalState(current)) {
+            return Fail(SDKError::ALREADY_TERMINATED,
+                        "Start: SDK is terminal and cannot be restarted");
+        }
+        if (current == SDKState::RUNNING) {
+            SetLastError("");
+            return SDKError::OK;
+        }
+        if (current == SDKState::PAUSED) {
+            pipeline->Resume();
+            TransitionStateUnlocked(SDKState::RUNNING);
+            SetLastError("");
+            return SDKError::OK;
+        }
+        if (!lipsync_model_loaded) {
+            return Fail(SDKError::MODEL_LOAD_FAILED,
+                        "Start: Wav2Lip model is not loaded");
+        }
+        if (!face_model_loaded || !pipeline->IsFaceModelLoaded()) {
+            return Fail(SDKError::FACE_MODEL_LOAD_FAILED,
+                        "Start: SCRFD and 2D106 face models are not loaded");
+        }
+        if (!pipeline->Start()) {
+            return Fail(SDKError::PIPELINE_START_FAILED,
+                        "Start: Pipeline failed to start");
+        }
+        TransitionStateUnlocked(SDKState::RUNNING);
+        SetLastError("");
+        return SDKError::OK;
+    }
+
+    SDKError StopUnlocked() {
+        const SDKState current = state.load(std::memory_order_acquire);
+        if (current == SDKState::UNINITIALIZED || current == SDKState::STOPPED) {
+            return SDKError::OK;
+        }
+        if (current != SDKState::STOPPING) {
+            TransitionStateUnlocked(SDKState::STOPPING);
+        }
+        if (pipeline && !pipeline->Stop()) {
+            return Fail(SDKError::SHUTDOWN_TIMEOUT,
+                        "Stop: shutdown timeout; call Stop again to retry");
+        }
+        TransitionStateUnlocked(SDKState::STOPPED);
+        SetLastError("");
+        return SDKError::OK;
+    }
+
     // ------------------------------------------------------------------
     // 配置转换：SDKConfig → PipelineConfig
     // ------------------------------------------------------------------
     core::PipelineConfig ToPipelineConfig(const SDKConfig& cfg) const {
         core::PipelineConfig p;
         p.audio_sample_rate       = cfg.audio_sample_rate;
+        p.audio_channels          = cfg.audio_channels;
         p.audio_frame_size        = cfg.audio_frame_size;
         p.audio_hop_size          = cfg.audio_hop_size;
         p.target_fps              = cfg.target_fps;
         p.face_size               = cfg.face_size;
         p.sync_threshold_ms       = cfg.sync_threshold_ms;
         p.max_drift_ms            = cfg.max_drift_ms;
-        p.mel_window_frames       = 16;
-        p.mel_context_frames      = 300;
+        p.av_match_threshold_ms   = cfg.av_match_threshold_ms;
+        p.mel_window_frames       = cfg.mel_window_frames;
+        p.mel_context_frames      = cfg.mel_context_frames;
         p.enable_frame_pacing     = cfg.enable_frame_pacing;
         p.opencv_num_threads      = cfg.opencv_num_threads;
         p.audio_raw_queue_size    = cfg.audio_raw_queue_size;
@@ -93,129 +248,109 @@ DigitalHumanSDK::~DigitalHumanSDK() {
 // ============================================================================
 
 SDKError DigitalHumanSDK::Init(const SDKConfig& config) {
-    if (impl_->state.load() != SDKState::UNINITIALIZED) {
-        impl_->SetLastError("Init: SDK 已初始化");
-        return SDKError::ALREADY_RUNNING;
+    std::lock_guard<std::mutex> lifecycle_lock(impl_->lifecycle_mutex);
+    const SDKState current = impl_->state.load(std::memory_order_acquire);
+    if (Impl::IsTerminalState(current)) {
+        return impl_->Fail(SDKError::ALREADY_TERMINATED,
+                           "Init: SDK is terminal and cannot be reused");
     }
-    if (impl_->terminated.load()) {
-        impl_->SetLastError("Init: SDK 已终止，不可重用");
-        return SDKError::ALREADY_TERMINATED;
+    if (current != SDKState::UNINITIALIZED) {
+        return impl_->Fail(SDKError::ALREADY_RUNNING,
+                           "Init: SDK is already initialized");
     }
 
-    // 参数校验
-    if (config.audio_sample_rate <= 0) {
-        impl_->SetLastError("Init: 无效采样率");
-        return SDKError::INVALID_CONFIG;
-    }
-    if (config.target_fps <= 0) {
-        impl_->SetLastError("Init: 无效帧率");
-        return SDKError::INVALID_CONFIG;
-    }
-    if (config.audio_frame_size <= 0 || config.audio_hop_size <= 0) {
-        impl_->SetLastError("Init: 无效音频帧/帧移参数");
-        return SDKError::INVALID_CONFIG;
+    if (config.audio_sample_rate <= 0 || config.audio_channels <= 0
+        || config.audio_frame_size <= 0 || config.audio_hop_size <= 0
+        || config.audio_hop_size > config.audio_frame_size
+        || config.face_size <= 0 || config.target_fps <= 0.0
+        || config.sync_threshold_ms < 0.0 || config.max_drift_ms < 0.0
+        || config.max_drift_ms < config.sync_threshold_ms
+        || config.av_match_threshold_ms < 0.0
+        || config.mel_window_frames <= 0
+        || config.mel_context_frames < config.mel_window_frames
+        || config.audio_raw_queue_size < 0 || config.mel_queue_size < 0
+        || config.video_raw_queue_size < 0 || config.face_queue_size < 0
+        || config.infer_queue_size < 0 || config.output_queue_size < 0
+        || config.pop_timeout_ms < 0 || config.shutdown_timeout_ms < 0
+        || config.file_audio_lead_ms < 0 || config.file_stall_timeout_ms <= 0) {
+        return impl_->Fail(SDKError::INVALID_CONFIG,
+                           "Init: invalid configuration");
     }
 
     impl_->config = config;
-
-    // 创建并初始化 Pipeline
+    impl_->lipsync_model_loaded = false;
+    impl_->face_model_loaded = false;
+    impl_->gpu_enabled = false;
     impl_->pipeline = std::make_unique<core::Pipeline>();
-    auto pipe_cfg = impl_->ToPipelineConfig(config);
-    if (!impl_->pipeline->Init(pipe_cfg)) {
+    if (!impl_->pipeline->Init(impl_->ToPipelineConfig(config))) {
         impl_->pipeline.reset();
-        impl_->SetLastError("Init: Pipeline 初始化失败");
-        return SDKError::UNKNOWN;
+        return impl_->Fail(SDKError::UNKNOWN,
+                           "Init: Pipeline initialization failed");
     }
 
-    // 加载模型（路径非空时自动加载）
     if (!config.lipsync_model_dir.empty()) {
-        auto err = LoadLipSyncModel(config.lipsync_model_dir);
-        if (err != SDKError::OK) return err;
+        const SDKError error = impl_->LoadLipSyncModelUnlocked(
+            config.lipsync_model_dir);
+        if (error != SDKError::OK) {
+            return error;
+        }
     }
     if (!config.face_model_dir.empty()) {
-        auto err = LoadFaceModel(config.face_model_dir);
-        if (err != SDKError::OK) return err;
+        const SDKError error = impl_->LoadFaceModelUnlocked(config.face_model_dir);
+        if (error != SDKError::OK) {
+            return error;
+        }
     }
-
-    // GPU 开关
     if (config.enable_gpu) {
-        auto err = EnableGPU(true);
-        if (err != SDKError::OK) {
-            // GPU 不可用不致命，回退 CPU 继续
+        // GPU unavailability is non-fatal during initialization; CPU remains active.
+        impl_->EnableGPUUnlocked(true);
+    }
+    if (config.inference_threads > 0) {
+        const SDKError error = impl_->SetInferenceThreadsUnlocked(
+            config.inference_threads);
+        if (error != SDKError::OK) {
+            return error;
         }
     }
 
-    // 推理线程数
-    if (config.inference_threads > 0) {
-        impl_->pipeline->SetInferenceThreads(config.inference_threads);
-    }
-
-    impl_->state.store(SDKState::INITIALIZED, std::memory_order_release);
+    impl_->TransitionStateUnlocked(SDKState::INITIALIZED);
     impl_->SetLastError("");
     return SDKError::OK;
 }
 
 SDKError DigitalHumanSDK::Start() {
-    auto s = impl_->state.load();
-    if (s == SDKState::UNINITIALIZED) {
-        impl_->SetLastError("Start: 未初始化");
-        return SDKError::NOT_INITIALIZED;
-    }
-    if (s == SDKState::RUNNING) {
-        return SDKError::OK;
-    }
-    if (impl_->terminated.load()) {
-        impl_->SetLastError("Start: SDK 已终止，拒绝重启");
-        return SDKError::ALREADY_TERMINATED;
-    }
-
-    if (!impl_->pipeline->Start()) {
-        impl_->SetLastError("Start: Pipeline 启动失败");
-        return SDKError::PIPELINE_START_FAILED;
-    }
-
-    impl_->state.store(SDKState::RUNNING, std::memory_order_release);
-    impl_->SetLastError("");
-    return SDKError::OK;
+    std::lock_guard<std::mutex> lifecycle_lock(impl_->lifecycle_mutex);
+    return impl_->StartUnlocked();
 }
 
 SDKError DigitalHumanSDK::Stop() {
-    auto s = impl_->state.load();
-    if (s == SDKState::UNINITIALIZED || s == SDKState::STOPPED) {
-        return SDKError::OK;
-    }
-
-    if (impl_->pipeline) {
-        impl_->pipeline->Stop();
-    }
-
-    impl_->terminated.store(true, std::memory_order_release);
-    impl_->state.store(SDKState::STOPPED, std::memory_order_release);
-    impl_->SetLastError("");
-    return SDKError::OK;
+    std::lock_guard<std::mutex> lifecycle_lock(impl_->lifecycle_mutex);
+    return impl_->StopUnlocked();
 }
 
 SDKError DigitalHumanSDK::Pause() {
-    if (impl_->state.load() != SDKState::RUNNING) {
-        impl_->SetLastError("Pause: 未运行");
-        return SDKError::NOT_RUNNING;
+    std::lock_guard<std::mutex> lifecycle_lock(impl_->lifecycle_mutex);
+    if (impl_->state.load(std::memory_order_acquire) != SDKState::RUNNING) {
+        return impl_->Fail(SDKError::NOT_RUNNING, "Pause: SDK is not running");
     }
     if (impl_->pipeline) {
         impl_->pipeline->Pause();
     }
-    impl_->state.store(SDKState::PAUSED, std::memory_order_release);
+    impl_->TransitionStateUnlocked(SDKState::PAUSED);
+    impl_->SetLastError("");
     return SDKError::OK;
 }
 
 SDKError DigitalHumanSDK::Resume() {
-    if (impl_->state.load() != SDKState::PAUSED) {
-        impl_->SetLastError("Resume: 未处于暂停状态");
-        return SDKError::NOT_RUNNING;
+    std::lock_guard<std::mutex> lifecycle_lock(impl_->lifecycle_mutex);
+    if (impl_->state.load(std::memory_order_acquire) != SDKState::PAUSED) {
+        return impl_->Fail(SDKError::NOT_RUNNING, "Resume: SDK is not paused");
     }
     if (impl_->pipeline) {
         impl_->pipeline->Resume();
     }
-    impl_->state.store(SDKState::RUNNING, std::memory_order_release);
+    impl_->TransitionStateUnlocked(SDKState::RUNNING);
+    impl_->SetLastError("");
     return SDKError::OK;
 }
 
@@ -224,56 +359,23 @@ SDKError DigitalHumanSDK::Resume() {
 // ============================================================================
 
 SDKError DigitalHumanSDK::LoadLipSyncModel(const std::string& model_dir) {
-    if (!impl_->pipeline) {
-        impl_->SetLastError("LoadLipSyncModel: Pipeline 未创建");
-        return SDKError::NOT_INITIALIZED;
-    }
-    if (!impl_->pipeline->InitModelInferencer(model_dir)) {
-        impl_->SetLastError("LoadLipSyncModel: 加载失败: " + model_dir);
-        return SDKError::MODEL_LOAD_FAILED;
-    }
-    impl_->lipsync_model_loaded = true;
-    return SDKError::OK;
+    std::lock_guard<std::mutex> lifecycle_lock(impl_->lifecycle_mutex);
+    return impl_->LoadLipSyncModelUnlocked(model_dir);
 }
 
 SDKError DigitalHumanSDK::LoadFaceModel(const std::string& model_dir) {
-    if (!impl_->pipeline) {
-        impl_->SetLastError("LoadFaceModel: Pipeline 未创建");
-        return SDKError::NOT_INITIALIZED;
-    }
-    impl_->pipeline->SetLandmarkModelPath(model_dir);
-    // SetLandmarkModelPath 仅记录路径，实际加载在 VideoProcessor 启动时
-    // 这里无法立即验证，标记为已配置
-    impl_->face_model_loaded = true;
-    return SDKError::OK;
+    std::lock_guard<std::mutex> lifecycle_lock(impl_->lifecycle_mutex);
+    return impl_->LoadFaceModelUnlocked(model_dir);
 }
 
 SDKError DigitalHumanSDK::EnableGPU(bool enable) {
-    if (!impl_->pipeline) {
-        impl_->SetLastError("EnableGPU: Pipeline 未创建");
-        return SDKError::NOT_INITIALIZED;
-    }
-    if (!impl_->pipeline->EnableGPU(enable)) {
-        impl_->SetLastError(enable
-            ? "EnableGPU: Vulkan 不可用或模型加载失败"
-            : "EnableGPU: 关闭 GPU 失败");
-        return enable ? SDKError::GPU_NOT_AVAILABLE : SDKError::UNKNOWN;
-    }
-    impl_->gpu_enabled = enable;
-    return SDKError::OK;
+    std::lock_guard<std::mutex> lifecycle_lock(impl_->lifecycle_mutex);
+    return impl_->EnableGPUUnlocked(enable);
 }
 
 SDKError DigitalHumanSDK::SetInferenceThreads(int n) {
-    if (!impl_->pipeline) {
-        impl_->SetLastError("SetInferenceThreads: Pipeline 未创建");
-        return SDKError::NOT_INITIALIZED;
-    }
-    if (n < 0) {
-        impl_->SetLastError("SetInferenceThreads: 线程数不能为负");
-        return SDKError::INVALID_CONFIG;
-    }
-    impl_->pipeline->SetInferenceThreads(n);
-    return SDKError::OK;
+    std::lock_guard<std::mutex> lifecycle_lock(impl_->lifecycle_mutex);
+    return impl_->SetInferenceThreadsUnlocked(n);
 }
 
 // ============================================================================
@@ -282,85 +384,118 @@ SDKError DigitalHumanSDK::SetInferenceThreads(int n) {
 
 SDKError DigitalHumanSDK::PushAudio(const std::vector<float>& pcm,
                                     int64_t pts_ms) {
-    if (impl_->state.load() != SDKState::RUNNING) {
-        impl_->SetLastError("PushAudio: 未运行");
-        return SDKError::NOT_RUNNING;
-    }
     if (pcm.empty()) {
-        impl_->SetLastError("PushAudio: 空 PCM 数据");
+        impl_->SetLastError("PushAudio: empty PCM data");
         return SDKError::INVALID_INPUT;
     }
-    if (!impl_->pipeline->PushAudio(pcm, pts_ms)) {
-        impl_->SetLastError("PushAudio: 入队失败（队列已停止或满）");
+
+    core::Pipeline* pipeline = nullptr;
+    {
+        std::lock_guard<std::mutex> lifecycle_lock(impl_->lifecycle_mutex);
+        if (impl_->state.load(std::memory_order_acquire) != SDKState::RUNNING
+            || !impl_->pipeline) {
+            impl_->SetLastError("PushAudio: SDK is not running");
+            return SDKError::NOT_RUNNING;
+        }
+        pipeline = impl_->pipeline.get();
+    }
+
+    if (!pipeline->PushAudio(pcm, pts_ms)) {
+        impl_->SetLastError("PushAudio: queue rejected the packet");
         return SDKError::UNKNOWN;
     }
     return SDKError::OK;
 }
 
 SDKError DigitalHumanSDK::PushVideo(const cv::Mat& frame, int64_t pts_ms) {
-    if (impl_->state.load() != SDKState::RUNNING) {
-        impl_->SetLastError("PushVideo: 未运行");
-        return SDKError::NOT_RUNNING;
-    }
     if (frame.empty()) {
-        impl_->SetLastError("PushVideo: 空图像");
+        impl_->SetLastError("PushVideo: empty frame");
         return SDKError::INVALID_INPUT;
     }
-    if (!impl_->pipeline->PushVideo(frame, pts_ms)) {
-        impl_->SetLastError("PushVideo: 入队失败（队列已停止或满）");
+
+    core::Pipeline* pipeline = nullptr;
+    {
+        std::lock_guard<std::mutex> lifecycle_lock(impl_->lifecycle_mutex);
+        if (impl_->state.load(std::memory_order_acquire) != SDKState::RUNNING
+            || !impl_->pipeline) {
+            impl_->SetLastError("PushVideo: SDK is not running");
+            return SDKError::NOT_RUNNING;
+        }
+        pipeline = impl_->pipeline.get();
+    }
+
+    if (!pipeline->PushVideo(frame, pts_ms)) {
+        impl_->SetLastError("PushVideo: queue rejected the frame");
         return SDKError::UNKNOWN;
     }
     return SDKError::OK;
 }
 
 SDKError DigitalHumanSDK::MarkAudioEOS() {
-    if (!impl_->pipeline) return SDKError::NOT_INITIALIZED;
-    impl_->pipeline->MarkAudioEOS();
+    core::Pipeline* pipeline = nullptr;
+    {
+        std::lock_guard<std::mutex> lifecycle_lock(impl_->lifecycle_mutex);
+        pipeline = impl_->pipeline.get();
+    }
+    if (!pipeline) return SDKError::NOT_INITIALIZED;
+    pipeline->MarkAudioEOS();
     return SDKError::OK;
 }
 
 SDKError DigitalHumanSDK::MarkVideoEOS() {
-    if (!impl_->pipeline) return SDKError::NOT_INITIALIZED;
-    impl_->pipeline->MarkVideoEOS();
+    core::Pipeline* pipeline = nullptr;
+    {
+        std::lock_guard<std::mutex> lifecycle_lock(impl_->lifecycle_mutex);
+        pipeline = impl_->pipeline.get();
+    }
+    if (!pipeline) return SDKError::NOT_INITIALIZED;
+    pipeline->MarkVideoEOS();
     return SDKError::OK;
 }
 
 // ============================================================================
-// 数据输出
+// Data output
 // ============================================================================
 
 SDKError DigitalHumanSDK::GetOutputFrame(cv::Mat& frame,
                                          int64_t& pts_ms,
                                          int timeout_ms) {
-    auto s = impl_->state.load();
-    if (s != SDKState::RUNNING && s != SDKState::PAUSED) {
-        // 流水线已停止：仍允许排空残留帧
-        if (s != SDKState::STOPPED) {
-            impl_->SetLastError("GetOutputFrame: 未运行");
+    core::Pipeline* pipeline = nullptr;
+    {
+        std::lock_guard<std::mutex> lifecycle_lock(impl_->lifecycle_mutex);
+        const auto s = impl_->state.load(std::memory_order_acquire);
+        if (s != SDKState::RUNNING && s != SDKState::PAUSED && s != SDKState::STOPPED) {
+            impl_->SetLastError("GetOutputFrame: SDK is not running");
             return SDKError::NOT_RUNNING;
         }
+        pipeline = impl_->pipeline.get();
     }
+    if (!pipeline) return SDKError::NOT_INITIALIZED;
 
     core::OutputFramePacket pkt;
-    if (!impl_->pipeline->GetOutputFrame(pkt, timeout_ms)) {
-        // 区分超时与流结束
-        if (impl_->terminated.load()) {
+    if (!pipeline->GetOutputFrame(pkt, timeout_ms)) {
+        if (Impl::IsTerminalState(
+                impl_->state.load(std::memory_order_acquire))) {
             return SDKError::NOT_RUNNING;
         }
         return SDKError::TIMEOUT;
     }
 
-    if (pkt.header.IsEOS() || pkt.header.IsFatal()) {
+    if (pkt.header.IsFatal()) {
+        impl_->SetLastError("GetOutputFrame: pipeline reported a fatal error");
+        return SDKError::UNKNOWN;
+    }
+    if (pkt.header.IsEOS()) {
         return SDKError::NOT_RUNNING;
     }
 
-    frame  = std::move(pkt.payload);
+    frame = std::move(pkt.payload);
     pts_ms = pkt.header.pts_ms;
     return SDKError::OK;
 }
 
 // ============================================================================
-// 文件便捷接口
+// File convenience API
 // ============================================================================
 
 SDKError DigitalHumanSDK::ProcessFile(const std::string& audio_path,
@@ -391,102 +526,199 @@ SDKError DigitalHumanSDK::ProcessFile(const std::string& audio_path,
         return SDKError::IMAGE_LOAD_FAILED;
     }
 
-    // ---- 3. 校验状态：必须已 Init，若未 Start 则自动启动 ----
-    auto s = impl_->state.load();
-    if (s == SDKState::UNINITIALIZED) {
-        impl_->SetLastError("ProcessFile: SDK 未初始化");
-        return SDKError::NOT_INITIALIZED;
-    }
-    if (impl_->terminated.load()) {
-        impl_->SetLastError("ProcessFile: SDK 已终止");
-        return SDKError::ALREADY_TERMINATED;
-    }
-    if (s != SDKState::RUNNING) {
-        auto err = Start();
-        if (err != SDKError::OK) return err;
+    // ---- 3. Validate state; start automatically when needed. ----
+    SDKConfig file_config;
+    {
+        std::lock_guard<std::mutex> lifecycle_lock(impl_->lifecycle_mutex);
+        const auto s = impl_->state.load(std::memory_order_acquire);
+        if (s == SDKState::UNINITIALIZED) {
+            impl_->SetLastError("ProcessFile: SDK not initialized");
+            return SDKError::NOT_INITIALIZED;
+        }
+        if (Impl::IsTerminalState(s)) {
+            impl_->SetLastError("ProcessFile: SDK already terminated");
+            return SDKError::ALREADY_TERMINATED;
+        }
+        file_config = impl_->config;
+        if (s != SDKState::RUNNING) {
+            const auto err = impl_->StartUnlocked();
+            if (err != SDKError::OK) return err;
+        }
     }
 
-    // ---- 4. 按目标帧率推送数据 ----
-    // 音频按 hop_size 分块推送，PTS 按样本数累计
-    // 视频按 target_fps 重复推送同一张图片，PTS 按帧序号累计
-    const int    sample_rate   = impl_->config.audio_sample_rate;
-    const double target_fps    = impl_->config.target_fps;
-    const int    hop_size      = impl_->config.audio_hop_size;
+    // ---- 4. 并行推送音频与视频 ----
+    // 两个独立生产者避免单一生产者先填满 Mel 队列、却尚未提交视频的
+    // 循环等待。音频生产者通过 PTS 水位限制领先量，既为 Matcher 保留
+    // 足够的 Mel 预读，又避免无界地跑在视频前面。
+    const int    sample_rate   = file_config.audio_sample_rate;
+    const double target_fps    = file_config.target_fps;
+    const int    hop_size      = file_config.audio_hop_size;
     const double frame_ms      = 1000.0 / target_fps;
-    const double hop_ms        = 1000.0 * hop_size / sample_rate;
+    const int64_t audio_lead_ms = file_config.file_audio_lead_ms;
 
     const int64_t total_samples = static_cast<int64_t>(audio_data.samples.size());
     const int64_t total_frames  = static_cast<int64_t>(
-        total_samples / sample_rate * target_fps);
+        std::ceil(static_cast<double>(total_samples) * target_fps
+                  / sample_rate));
 
-    // 启动一个推送线程 + 主线程拉取输出，避免单线程死锁
-    // （Pipeline 队列有界，若推送过快会阻塞，需要同时消费）
-    std::atomic<bool> push_done{false};
-    std::thread push_thread([&]() {
-        // 推送音频
+    std::atomic<bool> cancel_requested{false};
+    std::atomic<bool> video_done{false};
+    std::atomic<int64_t> latest_video_pts_ms{0};
+    std::mutex lead_mtx;
+    std::condition_variable lead_cv;
+
+    std::mutex producer_error_mtx;
+    SDKError producer_error = SDKError::OK;
+    std::string producer_error_message;
+
+    auto record_producer_error = [&](SDKError error,
+                                     const std::string& message) {
+        {
+            std::lock_guard<std::mutex> lk(producer_error_mtx);
+            if (producer_error == SDKError::OK) {
+                producer_error = error;
+                producer_error_message = message;
+            }
+        }
+        cancel_requested.store(true, std::memory_order_release);
+        lead_cv.notify_all();
+    };
+
+    // 音频生产者：允许有限预读，但不会无限领先视频时间轴。
+    std::thread audio_thread([&]() {
         int64_t sample_offset = 0;
-        while (sample_offset < total_samples) {
+        while (sample_offset < total_samples
+               && !cancel_requested.load(std::memory_order_acquire)) {
+            const int64_t audio_pts_ms = sample_offset * 1000 / sample_rate;
+            {
+                std::unique_lock<std::mutex> lk(lead_mtx);
+                lead_cv.wait(lk, [&]() {
+                    return cancel_requested.load(std::memory_order_acquire)
+                        || video_done.load(std::memory_order_acquire)
+                        || audio_pts_ms <=
+                            latest_video_pts_ms.load(std::memory_order_acquire)
+                                + audio_lead_ms;
+                });
+            }
+            if (cancel_requested.load(std::memory_order_acquire)) break;
+
             int64_t remain = total_samples - sample_offset;
             int64_t chunk  = std::min<int64_t>(hop_size, remain);
             std::vector<float> pcm(
                 audio_data.samples.begin() + sample_offset,
                 audio_data.samples.begin() + sample_offset + chunk);
-            double pts_ms = static_cast<double>(sample_offset)
-                          / sample_rate * 1000.0;
-            if (PushAudio(pcm, static_cast<int64_t>(pts_ms)) != SDKError::OK) {
+            auto err = PushAudio(pcm, audio_pts_ms);
+            if (err != SDKError::OK) {
+                if (!cancel_requested.load(std::memory_order_acquire)) {
+                    record_producer_error(err, "ProcessFile: 音频推送失败");
+                }
                 break;
             }
             sample_offset += chunk;
         }
         MarkAudioEOS();
-
-        // 推送视频帧（覆盖音频总时长）
-        for (int64_t f = 0; f < total_frames; ++f) {
-            int64_t vpts = static_cast<int64_t>(f * frame_ms);
-            if (PushVideo(face_image, vpts) != SDKError::OK) {
-                break;
-            }
-        }
-        MarkVideoEOS();
-        push_done.store(true, std::memory_order_release);
+        lead_cv.notify_all();
     });
 
-    // 主线程拉取输出帧
+    // 视频生产者：与音频独立运行。即使音频受到 Mel 队列反压，视频仍能
+    // 到达 face-driven Matcher，从而释放 Mel 队列。
+    std::thread video_thread([&]() {
+        for (int64_t f = 0;
+             f < total_frames
+                && !cancel_requested.load(std::memory_order_acquire);
+             ++f) {
+            int64_t vpts = static_cast<int64_t>(f * frame_ms);
+            auto err = PushVideo(face_image, vpts);
+            if (err != SDKError::OK) {
+                if (!cancel_requested.load(std::memory_order_acquire)) {
+                    record_producer_error(err, "ProcessFile: 视频推送失败");
+                }
+                break;
+            }
+            latest_video_pts_ms.store(vpts, std::memory_order_release);
+            lead_cv.notify_all();
+        }
+        MarkVideoEOS();
+        video_done.store(true, std::memory_order_release);
+        lead_cv.notify_all();
+    });
+
+    // ---- 5. 主线程拉取到明确 EOS；一次普通超时不代表流水线已排空 ----
     SDKError result = SDKError::OK;
+    std::string result_error_message;
+    auto last_progress = std::chrono::steady_clock::now();
     while (true) {
         cv::Mat out_frame;
         int64_t out_pts = 0;
         auto err = GetOutputFrame(out_frame, out_pts, 200);
         if (err == SDKError::OK) {
+            last_progress = std::chrono::steady_clock::now();
             if (!out_frame.empty()) {
-                callback(out_frame, out_pts);
+                try {
+                    callback(out_frame, out_pts);
+                } catch (const std::exception& e) {
+                    result_error_message =
+                        std::string("ProcessFile: 帧回调异常: ") + e.what();
+                    result = SDKError::UNKNOWN;
+                    break;
+                } catch (...) {
+                    result_error_message = "ProcessFile: 帧回调发生未知异常";
+                    result = SDKError::UNKNOWN;
+                    break;
+                }
             }
         } else if (err == SDKError::TIMEOUT) {
-            // 推送完成且拉取超时 → 尝试排空后结束
-            if (push_done.load(std::memory_order_acquire)) {
-                cv::Mat last;
-                int64_t last_pts = 0;
-                if (GetOutputFrame(last, last_pts, 100) == SDKError::OK
-                    && !last.empty()) {
-                    callback(last, last_pts);
+            {
+                std::lock_guard<std::mutex> lk(producer_error_mtx);
+                if (producer_error != SDKError::OK) {
+                    result = producer_error;
+                    break;
                 }
+            }
+
+            const auto stalled_ms =
+                std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now() - last_progress).count();
+            if (stalled_ms >= file_config.file_stall_timeout_ms) {
+                result_error_message = "ProcessFile: 流水线长时间无输出进展";
+                result = SDKError::TIMEOUT;
                 break;
             }
-            // 推送未完成，继续等待
         } else {
-            // NOT_RUNNING：可能是 EOS 正常结束，也可能是错误停止
-            // 若推送已完成，视为正常结束；否则记录错误
-            if (push_done.load(std::memory_order_acquire)) {
-                break;
+            // OutputFramePacket::EOS 被 GetOutputFrame 映射为 NOT_RUNNING。
+            std::lock_guard<std::mutex> lk(producer_error_mtx);
+            if (producer_error != SDKError::OK) {
+                result = producer_error;
+            } else if (err != SDKError::NOT_RUNNING) {
+                result = err;
+                result_error_message = GetLastError();
             }
-            result = err;
             break;
         }
     }
 
-    if (push_thread.joinable()) {
-        push_thread.join();
+    // Stop 会停止所有有界队列并唤醒可能阻塞在 Push() 的生产者。
+    cancel_requested.store(true, std::memory_order_release);
+    lead_cv.notify_all();
+    Stop();
+
+    if (audio_thread.joinable()) {
+        audio_thread.join();
     }
+    if (video_thread.joinable()) {
+        video_thread.join();
+    }
+
+    {
+        std::lock_guard<std::mutex> lk(producer_error_mtx);
+        if (result == SDKError::OK && producer_error != SDKError::OK) {
+            result = producer_error;
+        }
+        if (result != SDKError::OK && !producer_error_message.empty()) {
+            result_error_message = producer_error_message;
+        }
+    }
+    impl_->SetLastError(result == SDKError::OK ? "" : result_error_message);
 
     return result;
 }
@@ -505,24 +737,68 @@ std::string DigitalHumanSDK::GetLastError() const {
 }
 
 SDKMetrics DigitalHumanSDK::GetMetrics() const {
-    SDKMetrics m{};
-    if (!impl_->pipeline) return m;
+    SDKMetrics metrics{};
+    core::Pipeline* pipeline = nullptr;
+    {
+        std::lock_guard<std::mutex> lifecycle_lock(impl_->lifecycle_mutex);
+        pipeline = impl_->pipeline.get();
+        metrics.lifecycle_transition_count =
+            impl_->lifecycle_transition_count.load(std::memory_order_relaxed);
+    }
+    if (!pipeline) {
+        return metrics;
+    }
 
-    auto pm = impl_->pipeline->GetMetrics();
-    m.total_frames_in      = pm.total_frames_in;
-    m.total_frames_out     = pm.total_frames_out;
-    m.frames_dropped       = pm.frames_dropped;
-    m.frames_skipped       = pm.frames_skipped;
-    m.audio_packets_in     = pm.audio_packets_in;
-    m.video_packets_in     = pm.video_packets_in;
-    m.inference_count      = pm.inference_count;
-    m.avg_audio_process_ms = pm.avg_audio_process_ms;
-    m.avg_video_process_ms = pm.avg_video_process_ms;
-    m.avg_inference_ms     = pm.avg_inference_ms;
-    m.avg_output_ms        = pm.avg_output_ms;
-    m.actual_fps           = pm.actual_fps;
-    m.drift_ms             = impl_->pipeline->GetDriftMs();
-    return m;
+    const auto pipeline_metrics = pipeline->GetMetrics();
+    metrics.total_frames_in = pipeline_metrics.total_frames_in;
+    metrics.total_frames_out = pipeline_metrics.total_frames_out;
+    metrics.frames_dropped = pipeline_metrics.frames_dropped;
+    metrics.frames_skipped = pipeline_metrics.frames_skipped;
+    metrics.audio_packets_in = pipeline_metrics.audio_packets_in;
+    metrics.video_packets_in = pipeline_metrics.video_packets_in;
+    metrics.inference_count = pipeline_metrics.inference_count;
+    metrics.avg_audio_process_ms = pipeline_metrics.avg_audio_process_ms;
+    metrics.avg_video_process_ms = pipeline_metrics.avg_video_process_ms;
+    metrics.avg_inference_ms = pipeline_metrics.avg_inference_ms;
+    metrics.avg_output_ms = pipeline_metrics.avg_output_ms;
+    metrics.actual_fps = pipeline_metrics.actual_fps;
+    metrics.drift_ms = pipeline->GetDriftMs();
+
+    metrics.shutdown_attempt_count = pipeline_metrics.shutdown_attempt_count;
+    metrics.shutdown_timeout_count = pipeline_metrics.shutdown_timeout_count;
+    metrics.last_shutdown_ms = pipeline_metrics.last_shutdown_ms;
+    metrics.max_shutdown_ms = pipeline_metrics.max_shutdown_ms;
+    metrics.av_match_count = pipeline_metrics.av_match_count;
+    metrics.av_match_miss_count = pipeline_metrics.av_match_miss_count;
+    metrics.avg_av_match_error_ms = pipeline_metrics.avg_av_match_error_ms;
+    metrics.max_av_match_error_ms = pipeline_metrics.max_av_match_error_ms;
+
+    metrics.queue_depths.audio_raw = pipeline_metrics.queue_depths.audio_raw;
+    metrics.queue_depths.mel_features = pipeline_metrics.queue_depths.mel_features;
+    metrics.queue_depths.video_raw = pipeline_metrics.queue_depths.video_raw;
+    metrics.queue_depths.processed_faces =
+        pipeline_metrics.queue_depths.processed_faces;
+    metrics.queue_depths.inference_tasks =
+        pipeline_metrics.queue_depths.inference_tasks;
+    metrics.queue_depths.inference_output =
+        pipeline_metrics.queue_depths.inference_output;
+    metrics.queue_depths.output_frames = pipeline_metrics.queue_depths.output_frames;
+
+    metrics.queue_peak_depths.audio_raw =
+        pipeline_metrics.queue_peak_depths.audio_raw;
+    metrics.queue_peak_depths.mel_features =
+        pipeline_metrics.queue_peak_depths.mel_features;
+    metrics.queue_peak_depths.video_raw =
+        pipeline_metrics.queue_peak_depths.video_raw;
+    metrics.queue_peak_depths.processed_faces =
+        pipeline_metrics.queue_peak_depths.processed_faces;
+    metrics.queue_peak_depths.inference_tasks =
+        pipeline_metrics.queue_peak_depths.inference_tasks;
+    metrics.queue_peak_depths.inference_output =
+        pipeline_metrics.queue_peak_depths.inference_output;
+    metrics.queue_peak_depths.output_frames =
+        pipeline_metrics.queue_peak_depths.output_frames;
+    return metrics;
 }
 
 }  // namespace digital_human

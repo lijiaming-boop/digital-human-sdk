@@ -4,6 +4,7 @@
 #include <cmath>
 #include <deque>
 #include <iostream>
+#include <mutex>
 #include <sstream>
 #include <thread>
 #include <vector>
@@ -12,6 +13,7 @@
 #include "core/video_processor.h"
 #include "core/inference_worker.h"
 #include "core/render_thread.h"
+#include "core/worker_registry.h"
 #include "model/model_inferencer.h"
 #include "model/output_processor.h"
 
@@ -33,6 +35,11 @@ std::string PipelineMetrics::ToString() const {
         << " video_in=" << video_packets_in
         << " inference=" << inference_count
         << " fps=" << actual_fps
+        << " shutdown_ms=" << last_shutdown_ms
+        << " shutdown_timeouts=" << shutdown_timeout_count
+        << " av_match_misses=" << av_match_miss_count
+        << " output_queue=" << queue_depths.output_frames
+        << "/" << queue_peak_depths.output_frames
         << " }";
     return oss.str();
 }
@@ -51,6 +58,9 @@ struct Pipeline::Impl {
     /// 终止后 Start() 会被拒绝（一次性对象语义）：
     /// 队列已 Stop 不可恢复、worker 已退出无法重启。
     std::atomic<bool> terminated{false};
+    // Stop is terminal even when a finite wait times out.
+    std::atomic<bool> stop_requested{false};
+    mutable std::mutex lifecycle_mutex;
 
     // ---- 队列 ----
     ThreadSafeQueue<AudioRawPacket>       audio_raw_queue;
@@ -70,6 +80,9 @@ struct Pipeline::Impl {
     // ---- 音视频匹配线程（读取 mel + face，生成 InferenceTask） ----
     // 该线程负责 PTS 匹配 + 人脸缓存，是必要组件，不重复任何独立类
     std::unique_ptr<ThreadBase> matcher_thread;
+
+    // Non-owning lifecycle registry. Worker unique_ptrs remain the owners.
+    WorkerRegistry worker_registry;
 
     // ---- 外部模块（由 Pipeline 管理生命周期） ----
     model::ModelInferencer   model_inferencer;
@@ -94,6 +107,17 @@ struct Pipeline::Impl {
     std::atomic<int64_t> total_video_process_us{0};
     std::atomic<int64_t> video_process_count{0};
 
+    std::atomic<int64_t> lifecycle_transition_count{0};
+    std::atomic<int64_t> shutdown_attempt_count{0};
+    std::atomic<int64_t> shutdown_timeout_count{0};
+    std::atomic<int64_t> last_shutdown_us{0};
+    std::atomic<int64_t> max_shutdown_us{0};
+
+    std::atomic<int64_t> av_match_count{0};
+    std::atomic<int64_t> av_match_miss_count{0};
+    std::atomic<int64_t> total_av_match_error_us{0};
+    std::atomic<int64_t> max_av_match_error_us{0};
+
     // ---- 输入标记 ----
     std::atomic<bool> audio_eos{false};
     std::atomic<bool> video_eos{false};
@@ -109,6 +133,18 @@ struct Pipeline::Impl {
     // ========================================================================
 
     Impl() = default;
+
+    static void UpdateAtomicMax(std::atomic<int64_t>& target, int64_t value) {
+        int64_t current = target.load(std::memory_order_relaxed);
+        while (current < value
+               && !target.compare_exchange_weak(
+                   current, value, std::memory_order_relaxed)) {
+        }
+    }
+
+    void RecordLifecycleTransition() {
+        lifecycle_transition_count.fetch_add(1, std::memory_order_relaxed);
+    }
 
     // ========================================================================
     // 按 config 重建所有队列（容量来自 PipelineConfig）
@@ -175,6 +211,7 @@ struct Pipeline::Impl {
         ap_cfg.sample_rate = config.audio_sample_rate;
         ap_cfg.frame_size  = config.audio_frame_size;
         ap_cfg.hop_size    = config.audio_hop_size;
+        ap_cfg.channels    = config.audio_channels;
         audio_processor->SetConfig(ap_cfg);
         audio_processor->SetInputQueue(&audio_raw_queue);
         audio_processor->SetOutputQueue(&mel_feature_queue);
@@ -213,6 +250,13 @@ struct Pipeline::Impl {
         render_thread->SetOutputProcessor(&output_processor);
         render_thread->SetInputQueue(&inference_output_queue);
         render_thread->SetOutputQueue(&output_frame_queue);
+
+        worker_registry.Clear();
+        worker_registry.Add("RenderThread", render_thread.get());
+        worker_registry.Add("InferenceWorker", inference_worker.get());
+        worker_registry.Add("AVMatcher", matcher_thread.get());
+        worker_registry.Add("VideoProcessor", video_processor.get());
+        worker_registry.Add("AudioProcessor", audio_processor.get());
     }
 
     // ========================================================================
@@ -263,12 +307,11 @@ struct Pipeline::Impl {
                 ProcessedFacePacket face_pkt;
                 if (!ctx.processed_face_queue.WaitAndPop(
                         face_pkt, kPopTimeoutMs)) {
-                    if (ctx.video_eos.load(std::memory_order_acquire)
-                        && ctx.processed_face_queue.Empty()) {
-                        ctx.inference_task_queue.Push(InferenceTask::EOS());
-                        LogInfo("视频帧匹配完毕，发送 EOS");
-                        break;
-                    }
+                    // MarkVideoEOS only means that no more raw frames will be
+                    // submitted. VideoProcessor may still be converting queued
+                    // BGR frames, so an empty processed queue is not terminal.
+                    // Wait for the explicit ProcessedFacePacket::EOS emitted
+                    // after VideoProcessor has drained its input queue.
                     continue;
                 }
 
@@ -311,7 +354,31 @@ struct Pipeline::Impl {
                     continue;
                 }
 
-                // ---- 4. 装配 window×80 窗口（边界 clamp，与参考实现一致） ----
+                // ---- 4. 在可用 Mel 范围内选择最近窗口并校验 PTS 容差 ----
+                const int64_t available_last_seq = mel_first_seq_
+                    + static_cast<int64_t>(mel_rows_.size()) - 1;
+                const int64_t available_last_start = std::max(
+                    mel_first_seq_, available_last_seq - window_ + 1);
+                const int64_t matched_start = std::clamp(
+                    mel_start, mel_first_seq_, available_last_start);
+                const double matched_pts_ms = matched_start * hop_ms_;
+                const double match_error_ms = std::abs(
+                    static_cast<double>(face_pkt.header.pts_ms) - matched_pts_ms);
+                const int64_t match_error_us = static_cast<int64_t>(
+                    std::llround(match_error_ms * 1000.0));
+
+                ctx.av_match_count.fetch_add(1, std::memory_order_relaxed);
+                ctx.total_av_match_error_us.fetch_add(
+                    match_error_us, std::memory_order_relaxed);
+                Impl::UpdateAtomicMax(ctx.max_av_match_error_us, match_error_us);
+
+                if (match_error_ms > ctx.config.av_match_threshold_ms) {
+                    ctx.av_match_miss_count.fetch_add(1, std::memory_order_relaxed);
+                    continue;
+                }
+                mel_start = matched_start;
+
+                // ---- 5. 装配 window×80 窗口（边界 clamp，与参考实现一致） ----
                 cv::Mat win(window_, mel_bins_, CV_32F);
                 for (int f = 0; f < window_; ++f) {
                     int64_t idx = mel_start + f;
@@ -326,9 +393,9 @@ struct Pipeline::Impl {
                     }
                     row->copyTo(win.row(f));
                 }
-                // ---- 5. Mel 已由提取器按 Wav2Lip 规范归一化到 [-4, 4] ----
+                // ---- 6. Mel 已由提取器按 Wav2Lip 规范归一化到 [-4, 4] ----
 
-                // ---- 6. 丢弃窗口之前的旧行 + 裁剪上下文容量 ----
+                // ---- 7. 丢弃窗口之前的旧行 + 裁剪上下文容量 ----
                 while (mel_first_seq_ < mel_start && !mel_rows_.empty()) {
                     mel_rows_.pop_front();
                     ++mel_first_seq_;
@@ -338,7 +405,7 @@ struct Pipeline::Impl {
                     ++mel_first_seq_;
                 }
 
-                // ---- 7. 生成推理任务（PTS 以视频帧为准 —— 输出时间轴） ----
+                // ---- 8. 生成推理任务（PTS 以视频帧为准 —— 输出时间轴） ----
                 MelFeaturePacket mel_pkt;
                 mel_pkt.header.pts_ms = face_pkt.header.pts_ms;
                 mel_pkt.header.seq_id = face_pkt.header.seq_id;
@@ -443,27 +510,45 @@ Pipeline::Pipeline()
     : impl_(std::make_unique<Impl>()) {}
 
 Pipeline::~Pipeline() {
-    Stop();
+    if (!Stop()) {
+        // The finite API timeout has expired. Destruction still owns every
+        // worker and must join them before worker-specific members disappear.
+        impl_->worker_registry.WaitAll();
+        impl_->terminated.store(true, std::memory_order_release);
+        impl_->RecordLifecycleTransition();
+    }
 }
 
 bool Pipeline::Init(const PipelineConfig& config) {
-    if (impl_->initialized.load()) {
-        std::cerr << "[Pipeline] Init: 重复初始化" << std::endl;
+    std::lock_guard<std::mutex> lifecycle_lock(impl_->lifecycle_mutex);
+
+    if (impl_->initialized.load(std::memory_order_acquire)) {
+        std::cerr << "[Pipeline] Init: duplicate initialization" << std::endl;
         return false;
     }
-    if (impl_->terminated.load(std::memory_order_acquire)) {
-        std::cerr << "[Pipeline] Init: Pipeline 已被 Stop 终止，不可重复使用"
+    if (impl_->terminated.load(std::memory_order_acquire)
+        || impl_->stop_requested.load(std::memory_order_acquire)) {
+        std::cerr << "[Pipeline] Init: Pipeline is terminal and cannot be reused"
                   << std::endl;
         return false;
     }
 
-    // 校验参数
-    if (config.audio_sample_rate <= 0) {
-        std::cerr << "[Pipeline] Init: 无效采样率" << std::endl;
-        return false;
-    }
-    if (config.target_fps <= 0) {
-        std::cerr << "[Pipeline] Init: 无效帧率" << std::endl;
+    // Reject values that would cause division by zero, invalid queue sizes,
+    // or ambiguous shutdown semantics.
+    if (config.audio_sample_rate <= 0 || config.audio_channels <= 0
+        || config.audio_frame_size <= 0 || config.audio_hop_size <= 0
+        || config.audio_hop_size > config.audio_frame_size
+        || config.face_size <= 0 || config.target_fps <= 0.0
+        || config.sync_threshold_ms < 0.0 || config.max_drift_ms < 0.0
+        || config.max_drift_ms < config.sync_threshold_ms
+        || config.av_match_threshold_ms < 0.0
+        || config.mel_window_frames <= 0
+        || config.mel_context_frames < config.mel_window_frames
+        || config.audio_raw_queue_size < 0 || config.mel_queue_size < 0
+        || config.video_raw_queue_size < 0 || config.face_queue_size < 0
+        || config.infer_queue_size < 0 || config.output_queue_size < 0
+        || config.pop_timeout_ms < 0 || config.shutdown_timeout_ms < 0) {
+        std::cerr << "[Pipeline] Init: invalid configuration" << std::endl;
         return false;
     }
 
@@ -484,6 +569,7 @@ bool Pipeline::Init(const PipelineConfig& config) {
 
     impl_->CreateWorkers();
     impl_->initialized.store(true, std::memory_order_release);
+    impl_->RecordLifecycleTransition();
 
     std::cout << "[Pipeline] 初始化成功: "
               << config.audio_sample_rate << "Hz, "
@@ -492,77 +578,69 @@ bool Pipeline::Init(const PipelineConfig& config) {
 }
 
 bool Pipeline::Start() {
-    if (!impl_->initialized.load()) {
-        std::cerr << "[Pipeline] Start: 未初始化" << std::endl;
+    std::lock_guard<std::mutex> lifecycle_lock(impl_->lifecycle_mutex);
+
+    if (!impl_->initialized.load(std::memory_order_acquire)) {
+        std::cerr << "[Pipeline] Start: not initialized" << std::endl;
         return false;
     }
-    if (impl_->terminated.load(std::memory_order_acquire)) {
-        // Pipeline 是一次性对象：Stop() 后队列被永久 Stop、worker 状态机
-        // 无法从 STOPPED 回到 INIT，再次 Start 只会得到假运行状态。
-        std::cerr << "[Pipeline] Start: Pipeline 已被 Stop 终止，拒绝重启"
+    if (impl_->terminated.load(std::memory_order_acquire)
+        || impl_->stop_requested.load(std::memory_order_acquire)) {
+        std::cerr << "[Pipeline] Start: Pipeline is terminal, restart rejected"
                   << std::endl;
         return false;
     }
-    if (impl_->running.load()) {
+    if (impl_->running.load(std::memory_order_acquire)) {
         return true;
     }
 
     impl_->start_time = std::chrono::steady_clock::now();
 
-    // 按从下游到上游的顺序启动（消费者先启动，避免数据堆积无消费端）
-    // 检查每个 worker 的 Start() 返回值，任一失败则回滚已启动的线程
-    bool ok = true;
-    if (!impl_->render_thread->Start())    ok = false;
-    if (ok && !impl_->inference_worker->Start()) {
-        impl_->render_thread->Shutdown();
-        ok = false;
-    }
-    if (ok && !impl_->matcher_thread->Start()) {
-        impl_->inference_worker->Shutdown();
-        impl_->render_thread->Shutdown();
-        ok = false;
-    }
-    if (ok && !impl_->video_processor->Start()) {
-        impl_->matcher_thread->Shutdown();
-        impl_->inference_worker->Shutdown();
-        impl_->render_thread->Shutdown();
-        ok = false;
-    }
-    if (ok && !impl_->audio_processor->Start()) {
-        impl_->video_processor->Shutdown();
-        impl_->matcher_thread->Shutdown();
-        impl_->inference_worker->Shutdown();
-        impl_->render_thread->Shutdown();
-        ok = false;
-    }
-
-    if (!ok) {
-        std::cerr << "[Pipeline] Start: 部分线程启动失败，已回滚" << std::endl;
+    if (!impl_->worker_registry.StartAll()) {
+        impl_->running.store(false, std::memory_order_release);
+        impl_->stop_requested.store(true, std::memory_order_release);
+        impl_->terminated.store(true, std::memory_order_release);
+        impl_->RecordLifecycleTransition();
+        std::cerr << "[Pipeline] Start: worker startup failed; Pipeline terminated"
+                  << std::endl;
         return false;
     }
 
     impl_->running.store(true, std::memory_order_release);
-    std::cout << "[Pipeline] 已启动 (5 线程)" << std::endl;
+    impl_->RecordLifecycleTransition();
+    std::cout << "[Pipeline] started (" << impl_->worker_registry.Size()
+              << " workers)" << std::endl;
     return true;
 }
 
-void Pipeline::Stop() {
-    if (!impl_->running.load() && !impl_->initialized.load()) {
-        return;
+bool Pipeline::Stop() {
+    std::lock_guard<std::mutex> lifecycle_lock(impl_->lifecycle_mutex);
+
+    if (!impl_->initialized.load(std::memory_order_acquire)) {
+        return true;
     }
     if (impl_->terminated.load(std::memory_order_acquire)) {
-        // 已经被 Stop 过，幂等返回
-        return;
+        return true;
     }
 
-    std::cout << "[Pipeline] 正在停止..." << std::endl;
+    const auto shutdown_start = std::chrono::steady_clock::now();
+    impl_->shutdown_attempt_count.fetch_add(1, std::memory_order_relaxed);
 
-    // 先标记 EOS，让各线程自然退出
-    impl_->audio_processor->MarkEOS();
-    impl_->video_processor->MarkInputEOS();
+    const bool first_request = !impl_->stop_requested.exchange(
+        true, std::memory_order_acq_rel);
+    if (first_request) {
+        impl_->RecordLifecycleTransition();
+    }
+    std::cout << "[Pipeline] stopping..." << std::endl;
+    impl_->running.store(false, std::memory_order_release);
 
-    // 停止所有队列（唤醒等待线程）。Stop() 后队列不可恢复，因此 Pipeline
-    // 被视为一次性对象，再次 Start 会被拒绝。
+    if (impl_->audio_processor) {
+        impl_->audio_processor->MarkEOS();
+    }
+    if (impl_->video_processor) {
+        impl_->video_processor->MarkInputEOS();
+    }
+
     impl_->audio_raw_queue.Stop();
     impl_->mel_feature_queue.Stop();
     impl_->video_raw_queue.Stop();
@@ -571,25 +649,35 @@ void Pipeline::Stop() {
     impl_->inference_output_queue.Stop();
     impl_->output_frame_queue.Stop();
 
-    // 按从上游到下游的顺序停止线程
-    impl_->audio_processor->Stop();
-    impl_->video_processor->Stop();
-    impl_->matcher_thread->Stop();
-    impl_->inference_worker->Stop();
-    impl_->render_thread->Stop();
+    impl_->worker_registry.RequestStopAll();
+    const auto report = impl_->worker_registry.WaitAllFor(
+        impl_->config.shutdown_timeout_ms);
+    const int64_t elapsed_us = static_cast<int64_t>(std::llround(
+        std::chrono::duration<double, std::micro>(
+            std::chrono::steady_clock::now() - shutdown_start).count()));
+    impl_->last_shutdown_us.store(elapsed_us, std::memory_order_relaxed);
+    Impl::UpdateAtomicMax(impl_->max_shutdown_us, elapsed_us);
 
-    // 等待所有线程退出
-    int timeout = impl_->config.shutdown_timeout_ms;
-    impl_->audio_processor->Wait(timeout);
-    impl_->video_processor->Wait(timeout);
-    impl_->matcher_thread->Wait(timeout);
-    impl_->inference_worker->Wait(timeout);
-    impl_->render_thread->Wait(timeout);
+    if (report.all_stopped) {
+        impl_->terminated.store(true, std::memory_order_release);
+        impl_->RecordLifecycleTransition();
+        std::cout << "[Pipeline] stopped in "
+                  << static_cast<double>(elapsed_us) / 1000.0 << "ms" << std::endl;
+        return true;
+    }
 
-    impl_->running.store(false, std::memory_order_release);
-    // 标记终止：后续 Start() 会被拒绝
-    impl_->terminated.store(true, std::memory_order_release);
-    std::cout << "[Pipeline] 已停止" << std::endl;
+    impl_->shutdown_timeout_count.fetch_add(1, std::memory_order_relaxed);
+    std::cerr << "[Pipeline] Stop: shutdown timeout after "
+              << static_cast<double>(elapsed_us) / 1000.0
+              << "ms; workers remain owned" << std::endl;
+    for (const auto& worker : report.workers) {
+        if (!worker.stopped) {
+            std::cerr << "[Pipeline] Stop: worker '" << worker.name
+                      << "' did not stop within the shared deadline"
+                      << std::endl;
+        }
+    }
+    return false;
 }
 
 bool Pipeline::IsRunning() const {
@@ -601,7 +689,9 @@ bool Pipeline::IsRunning() const {
 // ========================================================================
 
 bool Pipeline::PushAudio(const std::vector<float>& pcm_data, int64_t pts_ms) {
-    if (!impl_->running.load()) {
+    if (!impl_->initialized.load(std::memory_order_acquire)
+        || impl_->stop_requested.load(std::memory_order_acquire)
+        || !impl_->running.load(std::memory_order_acquire)) {
         return false;
     }
     impl_->audio_packets_in.fetch_add(1, std::memory_order_relaxed);
@@ -613,7 +703,9 @@ bool Pipeline::PushAudio(const std::vector<float>& pcm_data, int64_t pts_ms) {
 }
 
 bool Pipeline::PushVideo(const cv::Mat& frame, int64_t pts_ms) {
-    if (!impl_->running.load()) {
+    if (!impl_->initialized.load(std::memory_order_acquire)
+        || impl_->stop_requested.load(std::memory_order_acquire)
+        || !impl_->running.load(std::memory_order_acquire)) {
         return false;
     }
     impl_->video_packets_in.fetch_add(1, std::memory_order_relaxed);
@@ -624,11 +716,17 @@ bool Pipeline::PushVideo(const cv::Mat& frame, int64_t pts_ms) {
 }
 
 void Pipeline::MarkAudioEOS() {
+    if (!impl_->initialized.load(std::memory_order_acquire) || !impl_->audio_processor) {
+        return;
+    }
     impl_->audio_eos.store(true, std::memory_order_release);
     impl_->audio_processor->MarkEOS();
 }
 
 void Pipeline::MarkVideoEOS() {
+    if (!impl_->initialized.load(std::memory_order_acquire) || !impl_->video_processor) {
+        return;
+    }
     impl_->video_eos.store(true, std::memory_order_release);
     impl_->video_processor->MarkInputEOS();
 }
@@ -646,13 +744,25 @@ bool Pipeline::GetOutputFrame(OutputFramePacket& frame, int timeout_ms) {
 // ========================================================================
 
 void Pipeline::Pause() {
-    impl_->paused.store(true, std::memory_order_release);
-    std::cout << "[Pipeline] 已暂停" << std::endl;
+    std::lock_guard<std::mutex> lifecycle_lock(impl_->lifecycle_mutex);
+    if (!impl_->running.load(std::memory_order_acquire)) {
+        return;
+    }
+    if (!impl_->paused.exchange(true, std::memory_order_acq_rel)) {
+        impl_->RecordLifecycleTransition();
+        std::cout << "[Pipeline] paused" << std::endl;
+    }
 }
 
 void Pipeline::Resume() {
-    impl_->paused.store(false, std::memory_order_release);
-    std::cout << "[Pipeline] 已恢复" << std::endl;
+    std::lock_guard<std::mutex> lifecycle_lock(impl_->lifecycle_mutex);
+    if (!impl_->running.load(std::memory_order_acquire)) {
+        return;
+    }
+    if (impl_->paused.exchange(false, std::memory_order_acq_rel)) {
+        impl_->RecordLifecycleTransition();
+        std::cout << "[Pipeline] resumed" << std::endl;
+    }
 }
 
 bool Pipeline::IsPaused() const {
@@ -664,44 +774,99 @@ bool Pipeline::IsPaused() const {
 // ========================================================================
 
 PipelineMetrics Pipeline::GetMetrics() const {
-    PipelineMetrics m;
-    // 输入计数：本对象维护，准确
-    m.total_frames_in   = impl_->total_frames_in.load();
-    m.audio_packets_in  = impl_->audio_packets_in.load();
-    m.video_packets_in  = impl_->video_packets_in.load();
+    PipelineMetrics metrics;
+    metrics.total_frames_in = impl_->total_frames_in.load(std::memory_order_relaxed);
+    metrics.audio_packets_in = impl_->audio_packets_in.load(std::memory_order_relaxed);
+    metrics.video_packets_in = impl_->video_packets_in.load(std::memory_order_relaxed);
 
-    // 音频/视频处理耗时：MatcherThread 累加 mel/face 包的 cost_ms
-    auto apc = impl_->audio_process_count.load(std::memory_order_relaxed);
-    if (apc > 0)
-        m.avg_audio_process_ms = static_cast<double>(
+    const int64_t audio_count = impl_->audio_process_count.load(
+        std::memory_order_relaxed);
+    if (audio_count > 0) {
+        metrics.avg_audio_process_ms = static_cast<double>(
             impl_->total_audio_process_us.load(std::memory_order_relaxed))
-            / apc / 1000.0;
-    auto vpc = impl_->video_process_count.load(std::memory_order_relaxed);
-    if (vpc > 0)
-        m.avg_video_process_ms = static_cast<double>(
+            / audio_count / 1000.0;
+    }
+    const int64_t video_count = impl_->video_process_count.load(
+        std::memory_order_relaxed);
+    if (video_count > 0) {
+        metrics.avg_video_process_ms = static_cast<double>(
             impl_->total_video_process_us.load(std::memory_order_relaxed))
-            / vpc / 1000.0;
+            / video_count / 1000.0;
+    }
 
-    // 推理计数：聚合 InferenceWorker 的指标
     if (impl_->inference_worker) {
-        auto im = impl_->inference_worker->GetMetrics();
-        m.inference_count   = im.total_inferences;
-        m.frames_skipped    = im.total_failures + im.skipped_due_to_backlog;
-        m.avg_inference_ms  = im.avg_latency_ms;
+        const auto inference_metrics = impl_->inference_worker->GetMetrics();
+        metrics.inference_count = inference_metrics.total_inferences;
+        metrics.frames_skipped = inference_metrics.total_failures
+                               + inference_metrics.skipped_due_to_backlog;
+        metrics.avg_inference_ms = inference_metrics.avg_latency_ms;
     }
 
-    // 输出/丢弃/渲染耗时：聚合 RenderThread 的指标
     if (impl_->render_thread) {
-        auto rm = impl_->render_thread->GetMetrics();
-        m.total_frames_out  = rm.frames_displayed;
-        m.frames_dropped    = rm.frames_dropped;
-        m.avg_output_ms     = rm.avg_render_ms;
-        // 实际帧率（FrameScheduler EMA 平滑值）
-        auto stats = impl_->render_thread->GetFrameStats();
-        m.actual_fps = stats.actual_fps;
+        const auto render_metrics = impl_->render_thread->GetMetrics();
+        metrics.total_frames_out = render_metrics.frames_displayed;
+        metrics.frames_dropped = render_metrics.frames_dropped;
+        metrics.avg_output_ms = render_metrics.avg_render_ms;
+        metrics.actual_fps = impl_->render_thread->GetFrameStats().actual_fps;
     }
 
-    return m;
+    metrics.lifecycle_transition_count = impl_->lifecycle_transition_count.load(
+        std::memory_order_relaxed);
+    metrics.shutdown_attempt_count = impl_->shutdown_attempt_count.load(
+        std::memory_order_relaxed);
+    metrics.shutdown_timeout_count = impl_->shutdown_timeout_count.load(
+        std::memory_order_relaxed);
+    metrics.last_shutdown_ms = static_cast<double>(
+        impl_->last_shutdown_us.load(std::memory_order_relaxed)) / 1000.0;
+    metrics.max_shutdown_ms = static_cast<double>(
+        impl_->max_shutdown_us.load(std::memory_order_relaxed)) / 1000.0;
+
+    metrics.av_match_count = impl_->av_match_count.load(std::memory_order_relaxed);
+    metrics.av_match_miss_count = impl_->av_match_miss_count.load(
+        std::memory_order_relaxed);
+    if (metrics.av_match_count > 0) {
+        metrics.avg_av_match_error_ms = static_cast<double>(
+            impl_->total_av_match_error_us.load(std::memory_order_relaxed))
+            / metrics.av_match_count / 1000.0;
+    }
+    metrics.max_av_match_error_ms = static_cast<double>(
+        impl_->max_av_match_error_us.load(std::memory_order_relaxed)) / 1000.0;
+
+    const auto audio_raw = impl_->audio_raw_queue.GetMetrics();
+    const auto mel_features = impl_->mel_feature_queue.GetMetrics();
+    const auto video_raw = impl_->video_raw_queue.GetMetrics();
+    const auto processed_faces = impl_->processed_face_queue.GetMetrics();
+    const auto inference_tasks = impl_->inference_task_queue.GetMetrics();
+    const auto inference_output = impl_->inference_output_queue.GetMetrics();
+    const auto output_frames = impl_->output_frame_queue.GetMetrics();
+
+    metrics.queue_depths.audio_raw = static_cast<int64_t>(audio_raw.current_size);
+    metrics.queue_depths.mel_features = static_cast<int64_t>(
+        mel_features.current_size);
+    metrics.queue_depths.video_raw = static_cast<int64_t>(video_raw.current_size);
+    metrics.queue_depths.processed_faces = static_cast<int64_t>(
+        processed_faces.current_size);
+    metrics.queue_depths.inference_tasks = static_cast<int64_t>(
+        inference_tasks.current_size);
+    metrics.queue_depths.inference_output = static_cast<int64_t>(
+        inference_output.current_size);
+    metrics.queue_depths.output_frames = static_cast<int64_t>(
+        output_frames.current_size);
+
+    metrics.queue_peak_depths.audio_raw = static_cast<int64_t>(audio_raw.peak_size);
+    metrics.queue_peak_depths.mel_features = static_cast<int64_t>(
+        mel_features.peak_size);
+    metrics.queue_peak_depths.video_raw = static_cast<int64_t>(video_raw.peak_size);
+    metrics.queue_peak_depths.processed_faces = static_cast<int64_t>(
+        processed_faces.peak_size);
+    metrics.queue_peak_depths.inference_tasks = static_cast<int64_t>(
+        inference_tasks.peak_size);
+    metrics.queue_peak_depths.inference_output = static_cast<int64_t>(
+        inference_output.peak_size);
+    metrics.queue_peak_depths.output_frames = static_cast<int64_t>(
+        output_frames.peak_size);
+
+    return metrics;
 }
 
 FrameStats Pipeline::GetFrameStats() const {
@@ -741,37 +906,69 @@ double Pipeline::GetAudioClockMs() const {
 }
 
 void Pipeline::SetLandmarkModelPath(const std::string& path) {
-    if (impl_->video_processor) {
+    std::lock_guard<std::mutex> lifecycle_lock(impl_->lifecycle_mutex);
+    if (!impl_->running.load(std::memory_order_acquire)
+        && !impl_->stop_requested.load(std::memory_order_acquire)
+        && impl_->video_processor) {
         impl_->video_processor->SetLandmarkModelPath(path);
     }
 }
 
+bool Pipeline::LoadFaceModel(const std::string& path) {
+    std::lock_guard<std::mutex> lifecycle_lock(impl_->lifecycle_mutex);
+    return !impl_->running.load(std::memory_order_acquire)
+        && !impl_->stop_requested.load(std::memory_order_acquire)
+        && impl_->video_processor
+        && impl_->video_processor->LoadFaceModel(path);
+}
+
+bool Pipeline::IsFaceModelLoaded() const {
+    std::lock_guard<std::mutex> lifecycle_lock(impl_->lifecycle_mutex);
+    return impl_->video_processor
+        && impl_->video_processor->IsFaceModelLoaded();
+}
+
 bool Pipeline::InitModelInferencer(const std::string& model_dir) {
-    return impl_->model_inferencer.Init(model_dir);
+    std::lock_guard<std::mutex> lifecycle_lock(impl_->lifecycle_mutex);
+    return !impl_->running.load(std::memory_order_acquire)
+        && !impl_->stop_requested.load(std::memory_order_acquire)
+        && impl_->model_inferencer.Init(model_dir);
 }
 
 bool Pipeline::InitModelInferencer(const std::string& param_path,
                                    const std::string& bin_path) {
-    return impl_->model_inferencer.Init(param_path, bin_path);
+    std::lock_guard<std::mutex> lifecycle_lock(impl_->lifecycle_mutex);
+    return !impl_->running.load(std::memory_order_acquire)
+        && !impl_->stop_requested.load(std::memory_order_acquire)
+        && impl_->model_inferencer.Init(param_path, bin_path);
 }
 
 bool Pipeline::EnableGPU(bool enable) {
-    return impl_->model_inferencer.EnableGPU(enable);
+    std::lock_guard<std::mutex> lifecycle_lock(impl_->lifecycle_mutex);
+    return !impl_->running.load(std::memory_order_acquire)
+        && !impl_->stop_requested.load(std::memory_order_acquire)
+        && impl_->model_inferencer.EnableGPU(enable);
 }
 
 bool Pipeline::IsGPUEnabled() const {
+    std::lock_guard<std::mutex> lifecycle_lock(impl_->lifecycle_mutex);
     return impl_->model_inferencer.IsGPUEnabled();
 }
 
 void Pipeline::SetCalibrationDumpDirectory(const std::string& directory,
                                            size_t max_samples) {
-    if (impl_->inference_worker) {
+    std::lock_guard<std::mutex> lifecycle_lock(impl_->lifecycle_mutex);
+    if (!impl_->running.load(std::memory_order_acquire)
+        && !impl_->stop_requested.load(std::memory_order_acquire)
+        && impl_->inference_worker) {
         impl_->inference_worker->SetCalibrationDumpDirectory(directory, max_samples);
     }
 }
 
 void Pipeline::SetInferenceThreads(int n) {
-    if (n > 0) {
+    std::lock_guard<std::mutex> lifecycle_lock(impl_->lifecycle_mutex);
+    if (n > 0 && !impl_->running.load(std::memory_order_acquire)
+        && !impl_->stop_requested.load(std::memory_order_acquire)) {
         impl_->model_inferencer.SetThreadCount(n);
     }
 }

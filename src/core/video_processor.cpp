@@ -230,7 +230,7 @@ VideoProcessor::VideoProcessor(const std::string& name)
     , impl_(std::make_unique<Impl>()) {}
 
 VideoProcessor::~VideoProcessor() {
-    Stop();
+    Shutdown();
 }
 
 // ============================================================================
@@ -262,6 +262,19 @@ void VideoProcessor::SetLandmarkModelPath(const std::string& path) {
     // FaceDetector 会在首次检测时按需加载模型
 }
 
+bool VideoProcessor::LoadFaceModel(const std::string& path) {
+    if (IsRunning()) {
+        impl_->LogError("线程运行中，拒绝重新加载人脸模型");
+        return false;
+    }
+    impl_->landmark_model_path = path;
+    return impl_->face_detector.loadModel(path);
+}
+
+bool VideoProcessor::IsFaceModelLoaded() const {
+    return impl_->face_detector.isModelLoaded();
+}
+
 // ============================================================================
 // 线程主循环
 // ============================================================================
@@ -279,12 +292,21 @@ void VideoProcessor::Run() {
     }
 
     // 加载 SCRFD + 2D106 人脸模型（支持按需加载）
-    if (!impl_->landmark_model_path.empty()) {
+    if (impl_->face_detector.isModelLoaded()) {
+        impl_->LogInfo("人脸关键点模型已加载: " +
+                       impl_->landmark_model_path);
+    } else if (!impl_->landmark_model_path.empty()) {
         if (impl_->face_detector.loadModel(impl_->landmark_model_path)) {
             impl_->LogInfo("人脸关键点模型已加载: " + impl_->landmark_model_path);
         } else {
-            impl_->LogWarn("人脸关键点模型加载失败，关键点功能不可用");
+            impl_->LogError("人脸关键点模型加载失败，终止视频处理");
+            impl_->output_queue_->Push(ProcessedFacePacket::Fatal());
+            return;
         }
+    } else {
+        impl_->LogError("未配置人脸模型，终止视频处理");
+        impl_->output_queue_->Push(ProcessedFacePacket::Fatal());
+        return;
     }
 
     while (!IsStopping()) {

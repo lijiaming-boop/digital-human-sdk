@@ -86,6 +86,13 @@ public:
     /// @brief 设置 SCRFD + 2D106 人脸模型目录
     void SetLandmarkModelPath(const std::string& path);
 
+    /// @brief 同步加载 SCRFD + 2D106 人脸模型
+    /// @return true 加载成功；必须在线程启动前调用
+    bool LoadFaceModel(const std::string& path);
+
+    /// @brief 人脸检测与关键点模型是否已成功加载
+    bool IsFaceModelLoaded() const;
+
     // ========================================================================
     // 线程主循环
     // ========================================================================

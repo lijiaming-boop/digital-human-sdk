@@ -220,7 +220,7 @@ RenderThread::RenderThread(const std::string& name)
     , impl_(std::make_unique<Impl>()) {}
 
 RenderThread::~RenderThread() {
-    Stop();
+    Shutdown();
 }
 
 // ============================================================================

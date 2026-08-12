@@ -360,7 +360,7 @@ AudioProcessor::AudioProcessor(const std::string& name)
     , impl_(std::make_unique<Impl>()) {}
 
 AudioProcessor::~AudioProcessor() {
-    Stop();
+    Shutdown();
 }
 
 // ============================================================================
