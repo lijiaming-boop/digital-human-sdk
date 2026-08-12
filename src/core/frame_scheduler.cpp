@@ -6,6 +6,8 @@
 #include <sstream>
 #include <limits>
 
+#include "digital_human/log_macros.h"
+
 namespace digital_human {
 namespace core {
 
@@ -148,7 +150,7 @@ FrameScheduler& FrameScheduler::operator=(FrameScheduler&&) noexcept = default;
 void FrameScheduler::Init(const SchedulerConfig& config) {
     impl_->config = config;
     if (impl_->config.target_fps <= 0.0) {
-        std::cerr << "[FrameScheduler] Init: target_fps <= 0，使用默认 30fps" << std::endl;
+        DH_LOG_WARN("frame_scheduler") << "Init: target_fps <= 0，使用默认 30fps";
         impl_->config.target_fps = 30.0;
     }
     if (impl_->config.max_pending_frames <= 0) {
@@ -167,7 +169,7 @@ bool FrameScheduler::IsInitialized() const {
 
 ScheduleResult FrameScheduler::ScheduleFrame(int frame_id, double pts_ms) {
     if (!impl_->initialized) {
-        std::cerr << "[FrameScheduler] ScheduleFrame: 未初始化" << std::endl;
+        DH_LOG_ERROR("frame_scheduler") << "ScheduleFrame: 未初始化";
         ScheduleResult err;
         err.action = FrameAction::DROP;
         return err;
@@ -212,7 +214,7 @@ void FrameScheduler::Reset() {
 
 void FrameScheduler::SetTargetFps(double fps) {
     if (fps <= 0.0) {
-        std::cerr << "[FrameScheduler] SetTargetFps: fps <= 0" << std::endl;
+        DH_LOG_ERROR("frame_scheduler") << "SetTargetFps: fps <= 0";
         return;
     }
     impl_->config.target_fps = fps;

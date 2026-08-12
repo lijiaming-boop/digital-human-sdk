@@ -3,6 +3,8 @@
 #include <opencv2/opencv.hpp>
 #include <filesystem>
 
+#include "digital_human/log_macros.h"
+
 namespace fs = std::filesystem;
 
 namespace digital_human {
@@ -48,7 +50,7 @@ struct ImageLoader::ImageLoaderImpl {
             try {
                 imgs.push_back(loadImageFromFile(path));
             } catch (const ImageLoaderException& e) {
-                std::cerr << "[ImageLoader] load image from file failed: " << e.what() << std::endl;
+                DH_LOG_ERROR("image_loader") << "load image from file failed: " << e.what();
                 imgs.push_back(cv::Mat());
                 continue;
             }

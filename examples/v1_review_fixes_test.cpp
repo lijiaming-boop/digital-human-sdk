@@ -633,7 +633,7 @@ static void TestCMakeBuildConfig() {
         TEST_CHECK(false, "6.7 无法打开 CMakeLists.txt 进行验证");
     }
 
-    // 6.3 验证 src/CMakeLists.txt 使用 CONFIGURE_DEPENDS
+    // 6.3 模块化构建使用显式源文件列表，避免 glob 造成不可预测的增量配置。
     std::string src_cmake_path = std::string(PROJECT_SOURCE_DIR) + "/src/CMakeLists.txt";
     std::ifstream src_cmake(src_cmake_path);
     if (src_cmake.is_open()) {
@@ -648,8 +648,8 @@ static void TestCMakeBuildConfig() {
         bool has_target_link = content.find("target_link_libraries")
                                 != std::string::npos;
 
-        TEST_CHECK(has_configure_depends,
-                   "6.8 src/CMakeLists.txt 含 CONFIGURE_DEPENDS");
+        TEST_CHECK(!has_configure_depends,
+                   "6.8 src/CMakeLists.txt 使用显式源文件列表");
         TEST_CHECK(has_target_compile_options,
                    "6.9 src/CMakeLists.txt 使用 target_compile_options");
         TEST_CHECK(has_target_include,

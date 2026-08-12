@@ -1,4 +1,5 @@
 #include "model/model_loader.h"
+#include "digital_human/log_macros.h"
 
 #include <iostream>
 #include <chrono>
@@ -45,11 +46,11 @@ struct ModelLoader::Impl {
 
     bool verifyFiles(const std::string& param_path, const std::string& bin_path) {
         if (!fs::exists(param_path)) {
-            std::cerr << "[ModelLoader] param file not found: " << param_path << std::endl;
+            DH_LOG_ERROR("model.loader") << "param file not found: " << param_path;
             return false;
         }
         if (!fs::exists(bin_path)) {
-            std::cerr << "[ModelLoader] bin file not found: " << bin_path << std::endl;
+            DH_LOG_ERROR("model.loader") << "bin file not found: " << bin_path;
             return false;
         }
         return true;
@@ -61,14 +62,14 @@ struct ModelLoader::Impl {
         auto io_start = std::chrono::steady_clock::now();
 
         if (net.load_param(param_path.c_str()) != 0) {
-            std::cerr << "[ModelLoader] failed to load param: " << param_path << std::endl;
+            DH_LOG_ERROR("model.loader") << "failed to load param: " << param_path;
             loading = false;
             safeCallback(callback, nullptr, 0.0f, 0.0f);
             return;
         }
 
         if (net.load_model(bin_path.c_str()) != 0) {
-            std::cerr << "[ModelLoader] failed to load model: " << bin_path << std::endl;
+            DH_LOG_ERROR("model.loader") << "failed to load model: " << bin_path;
             loading = false;
             safeCallback(callback, nullptr, 0.0f, 0.0f);
             return;
@@ -76,7 +77,7 @@ struct ModelLoader::Impl {
 
         auto io_end = std::chrono::steady_clock::now();
         io_cost_ms = std::chrono::duration<float, std::milli>(io_end - io_start).count();
-        std::cout << "[ModelLoader] IO cost: " << io_cost_ms << " ms" << std::endl;
+        DH_LOG_INFO("model.loader") << "IO cost: " << io_cost_ms << " ms";
 
         // ---- Warmup ----
         auto warmup_start = std::chrono::steady_clock::now();
@@ -98,10 +99,10 @@ struct ModelLoader::Impl {
         warmup_cost_ms = std::chrono::duration<float, std::milli>(warmup_end - warmup_start).count();
 
         if (ret != 0) {
-            std::cerr << "[ModelLoader] warmup inference failed (ret=" << ret
-                      << "), model loaded but warmup shapes may be wrong" << std::endl;
+            DH_LOG_ERROR("model.loader") << "warmup inference failed (ret=" << ret
+                      << "), model loaded but warmup shapes may be wrong";
         } else {
-            std::cout << "[ModelLoader] warmup cost: " << warmup_cost_ms << " ms" << std::endl;
+            DH_LOG_INFO("model.loader") << "warmup cost: " << warmup_cost_ms << " ms";
         }
 
         is_loaded = true;
@@ -117,9 +118,9 @@ struct ModelLoader::Impl {
         try {
             callback(net, io_cost, warmup_cost);
         } catch (const std::exception& e) {
-            std::cerr << "[ModelLoader] 回调异常 (已捕获): " << e.what() << std::endl;
+            DH_LOG_ERROR("model.loader") << "回调异常 (已捕获): " << e.what();
         } catch (...) {
-            std::cerr << "[ModelLoader] 回调未知异常 (已捕获)" << std::endl;
+            DH_LOG_ERROR("model.loader") << "回调未知异常 (已捕获)";
         }
     }
 };

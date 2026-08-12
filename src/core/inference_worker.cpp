@@ -15,6 +15,7 @@
 #include <opencv2/imgproc.hpp>
 
 #include "model/model_inferencer.h"
+#include "digital_human/log_macros.h"
 
 namespace digital_human {
 namespace core {
@@ -238,14 +239,14 @@ struct InferenceWorker::Impl {
         const auto face_path = calibration_dump_dir_ / "face"
                              / (std::to_string(index) + ".npy");
         if (!WriteFloat32Npy(audio_path, audio) || !WriteFloat32Npy(face_path, face)) {
-            std::cerr << "[InferenceWorker] failed to dump INT8 calibration sample "
-                      << index << std::endl;
+            DH_LOG_ERROR("inference_worker") << "failed to dump INT8 calibration sample "
+                      << index;
             return;
         }
         std::ofstream audio_list(calibration_dump_dir_ / "audio.list", std::ios::app);
         std::ofstream face_list(calibration_dump_dir_ / "face.list", std::ios::app);
         if (!audio_list || !face_list) {
-            std::cerr << "[InferenceWorker] failed to update calibration list files" << std::endl;
+            DH_LOG_ERROR("inference_worker") << "failed to update calibration list files";
             return;
         }
         audio_list << std::filesystem::absolute(audio_path).string() << '\n';
@@ -277,14 +278,14 @@ struct InferenceWorker::Impl {
 
         if (depth >= config.input_queue_error_threshold) {
             backlogged_.store(true, std::memory_order_release);
-            std::cerr << "[InferenceWorker] 严重积压: 输入队列深度="
+            DH_LOG_ERROR("inference_worker") << "严重积压: 输入队列深度="
                       << depth << " (阈值=" << config.input_queue_error_threshold
-                      << ")" << std::endl;
+                      << ")";
         } else if (depth >= config.input_queue_warn_threshold) {
             backlogged_.store(true, std::memory_order_release);
-            std::cout << "[InferenceWorker] 积压警告: 输入队列深度="
+            DH_LOG_WARN("inference_worker") << "积压警告: 输入队列深度="
                       << depth << " (阈值=" << config.input_queue_warn_threshold
-                      << ")" << std::endl;
+                      << ")";
         } else {
             backlogged_.store(false, std::memory_order_release);
         }
@@ -307,9 +308,8 @@ struct InferenceWorker::Impl {
                  ncnn::Mat& output, double& latency_ms) {
         if (!model_ || !model_->IsInitialized()) {
             // 无模型时返回 false（测试模式下触发重试机制）
-            std::cerr << "[InferenceWorker] 模型未初始化，返回失败"
-                      << " pts=" << task.mel.header.pts_ms << "ms"
-                      << std::endl;
+            DH_LOG_ERROR("inference_worker") << "模型未初始化，返回失败"
+                      << " pts=" << task.mel.header.pts_ms << "ms";
             return false;
         }
 
@@ -318,10 +318,9 @@ struct InferenceWorker::Impl {
         ncnn::Mat face_ncnn  = FaceToNCNN(task.face.payload.aligned_face);
 
         if (audio_ncnn.empty() || face_ncnn.empty()) {
-            std::cerr << "[InferenceWorker] 张量转换失败: "
+            DH_LOG_ERROR("inference_worker") << "张量转换失败: "
                       << "audio_empty=" << audio_ncnn.empty()
-                      << " face_empty=" << face_ncnn.empty()
-                      << std::endl;
+                      << " face_empty=" << face_ncnn.empty();
             return false;
         }
 
@@ -335,10 +334,9 @@ struct InferenceWorker::Impl {
         latency_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
 
         if (output.empty()) {
-            std::cerr << "[InferenceWorker] 推理返回空输出"
+            DH_LOG_ERROR("inference_worker") << "推理返回空输出"
                       << " pts=" << task.mel.header.pts_ms << "ms"
-                      << " seq=" << task.mel.header.seq_id
-                      << std::endl;
+                      << " seq=" << task.mel.header.seq_id;
             return false;
         }
 
@@ -385,12 +383,11 @@ struct InferenceWorker::Impl {
 
     /// @brief 记录失败日志
     void LogFailure(const InferenceTask& task, const std::string& reason) {
-        std::cerr << "[InferenceWorker] 推理失败"
+        DH_LOG_ERROR("inference_worker") << "推理失败"
                   << " pts=" << task.mel.header.pts_ms << "ms"
                   << " seq=" << task.mel.header.seq_id
                   << " retry=" << task.retry_count << "/" << task.kMaxRetries
-                  << " 原因: " << reason
-                  << std::endl;
+                  << " 原因: " << reason;
     }
 };
 
@@ -438,8 +435,8 @@ void InferenceWorker::SetCalibrationDumpDirectory(const std::string& directory,
     std::filesystem::create_directories(root / "audio", ec);
     std::filesystem::create_directories(root / "face", ec);
     if (ec) {
-        std::cerr << "[InferenceWorker] cannot create calibration directory: "
-                  << root << " (" << ec.message() << ")" << std::endl;
+        DH_LOG_ERROR("inference_worker") << "cannot create calibration directory: "
+                  << root << " (" << ec.message() << ")";
         return;
     }
     std::ofstream(root / "audio.list", std::ios::trunc).close();

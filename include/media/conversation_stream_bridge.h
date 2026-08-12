@@ -17,7 +17,7 @@ class StreamPublisher;
 
 /// Fans TTS PCM out to both the DigitalHumanSDK and StreamPublisher, while a
 /// background thread drains rendered BGR frames from the SDK into the publisher.
-class ConversationStreamBridge final : public dialog::IDigitalHumanSink {
+class DH_API ConversationStreamBridge final : public dialog::IDigitalHumanSink {
 public:
     ConversationStreamBridge(DigitalHumanSDK& sdk,
                              StreamPublisher& publisher);

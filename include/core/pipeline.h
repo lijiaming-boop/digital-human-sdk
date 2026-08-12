@@ -177,7 +177,7 @@ public:
      */
     /// @return true  all workers exited before the shared deadline
     /// @return false at least one worker is still running; Stop may be retried
-    bool Stop();
+    bool Stop(int timeout_ms = -1);
 
     /// @brief 检查 Pipeline 是否在运行
     bool IsRunning() const;

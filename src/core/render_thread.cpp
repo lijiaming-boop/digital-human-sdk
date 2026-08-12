@@ -11,6 +11,7 @@
 
 #include "audio/audio_player.h"
 #include "model/output_processor.h"
+#include "digital_human/log_macros.h"
 
 namespace digital_human {
 namespace core {
@@ -144,18 +145,18 @@ struct RenderThread::Impl {
         last_drift_ms_.store(drift, std::memory_order_relaxed);
 
         if (std::abs(drift) >= config.max_drift_ms) {
-            std::cout << "[RenderThread] 严重偏移: drift="
-                      << drift << "ms, DROP" << std::endl;
+            DH_LOG_WARN("render_thread") << "严重偏移: drift="
+                      << drift << "ms, DROP";
             return FrameAction::DROP;
         }
         if (drift > config.sync_threshold_ms) {
-            std::cout << "[RenderThread] 视频超前: drift="
-                      << drift << "ms, DUPLICATE" << std::endl;
+            DH_LOG_WARN("render_thread") << "视频超前: drift="
+                      << drift << "ms, DUPLICATE";
             return FrameAction::DUPLICATE;
         }
         if (drift < -config.sync_threshold_ms) {
-            std::cout << "[RenderThread] 视频滞后: drift="
-                      << drift << "ms, DROP" << std::endl;
+            DH_LOG_WARN("render_thread") << "视频滞后: drift="
+                      << drift << "ms, DROP";
             return FrameAction::DROP;
         }
 

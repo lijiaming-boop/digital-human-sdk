@@ -1,6 +1,7 @@
-#include "tts/tts_client.h"
+#include "tts/http_tts_client.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cstring>
 #include <utility>
 #include <vector>
@@ -69,6 +70,17 @@ bool HttpTTSClient::Synthesize(const std::string& text,
     request.low_speed_time_ms = config_.request_timeout_ms > 0
         ? config_.request_timeout_ms : 30000;
     request.follow_redirects = false;  // TTS 端点不应重定向，收紧 SSRF 边界
+    request.content_type_validator = [](const std::string& content_type) {
+        std::string lower = content_type;
+        std::transform(lower.begin(), lower.end(), lower.begin(),
+                       [](unsigned char c) {
+                           return static_cast<char>(std::tolower(c));
+                       });
+        return lower.empty()
+            || lower.find("audio/") != std::string::npos
+            || lower.find("octet-stream") != std::string::npos
+            || lower.find("text/plain") != std::string::npos;
+    };
     request.headers = config_.headers;
     request.headers.emplace_back("Content-Type: application/json");
     request.headers.emplace_back("Accept: application/octet-stream");
@@ -159,11 +171,16 @@ bool HttpTTSClient::Synthesize(const std::string& text,
         return false;
     }
 
-    // 校验响应 Content-Type（传输完成后才可读取，仅作后置校验）。
-    if (!response.content_type.empty()
-        && response.content_type.find("audio/") == std::string::npos
-        && response.content_type.find("octet-stream") == std::string::npos
-        && response.content_type.find("text/plain") == std::string::npos) {
+    // 二次校验响应 Content-Type；首个 body chunk 前已由 HttpClient 校验。
+    std::string response_content_type = response.content_type;
+    std::transform(response_content_type.begin(), response_content_type.end(),
+                   response_content_type.begin(), [](unsigned char c) {
+                       return static_cast<char>(std::tolower(c));
+                   });
+    if (!response_content_type.empty()
+        && response_content_type.find("audio/") == std::string::npos
+        && response_content_type.find("octet-stream") == std::string::npos
+        && response_content_type.find("text/plain") == std::string::npos) {
         error = "TTS response has unexpected Content-Type: "
               + response.content_type;
         return false;
@@ -172,6 +189,10 @@ bool HttpTTSClient::Synthesize(const std::string& text,
     // 残留字节必须是完整 sample，否则视为截断。
     if (!state.residual.empty()) {
         error = "TTS response ended with an incomplete PCM sample";
+        return false;
+    }
+    if (state.total_samples == 0) {
+        error = "TTS response contained no audio samples";
         return false;
     }
 

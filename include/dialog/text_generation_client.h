@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-#include "network/http_client.h"
+#include "digital_human/export.h"
 
 namespace digital_human {
 namespace dialog {
@@ -24,7 +24,10 @@ struct GenerateRequest {
 using TextDeltaCallback = std::function<void(const std::string&)>;
 using CancelCheck = std::function<bool()>;
 
-class ITextGenerationClient {
+/// 抽象文本生成接口：会话层只依赖此接口，不传递任何 HTTP/libcurl 依赖。
+/// 具体适配器（HttpTextGenerationClient / LlamaCppTextGenerationClient）
+/// 声明在各自独立头文件中，由需要网络能力的调用方按需引入。
+class DH_API ITextGenerationClient {
 public:
     virtual ~ITextGenerationClient() = default;
 
@@ -40,33 +43,6 @@ enum class TextResponseMode {
     AUTO,
     JSON,
     SSE,
-};
-
-/// Generic HTTP contract:
-/// request: {session_id, system_prompt, user_text, history, stream}
-/// JSON response: {"reply":"..."}
-/// SSE event: data: {"delta":"..."}; final event may contain {"done":true}.
-struct HttpTextGenerationConfig {
-    std::string endpoint;
-    std::string api_key;
-    std::vector<std::string> headers;
-    TextResponseMode response_mode = TextResponseMode::AUTO;
-    int connect_timeout_ms = 2000;
-    int request_timeout_ms = 30000;
-};
-
-class HttpTextGenerationClient final : public ITextGenerationClient {
-public:
-    explicit HttpTextGenerationClient(HttpTextGenerationConfig config);
-
-    bool Generate(const GenerateRequest& request,
-                  const TextDeltaCallback& on_delta,
-                  const CancelCheck& cancelled,
-                  std::string& error) override;
-
-private:
-    HttpTextGenerationConfig config_;
-    network::HttpClient http_;
 };
 
 }  // namespace dialog

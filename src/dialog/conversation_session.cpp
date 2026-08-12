@@ -11,7 +11,12 @@
 
 #include <opencv2/imgproc.hpp>
 
+#include "audio/streaming_vad.h"
+#include "dialog/asr_client.h"
 #include "dialog/sentence_segmenter.h"
+#include "digital_human/log_context.h"
+#include "digital_human/log_macros.h"
+#include "digital_human/metrics.h"
 #include "digital_human_sdk.h"
 
 namespace digital_human {
@@ -135,6 +140,14 @@ struct ConversationSession::Impl {
     int avatar_canvas_width = 0;
     int avatar_canvas_height = 0;
 
+    /// Barge-in（P1-3.10c）：可选的 ASR 与流式 VAD，由调用方注入。
+    /// 生命周期由调用方管理，Stop 前须保持有效。
+    IASRClient*           asr_client = nullptr;
+    audio::IStreamingVAD* streaming_vad = nullptr;
+    /// ASR 是否已 Start（避免重复 Start，并在 Stop 时正确回收）。
+    bool asr_started = false;
+    bool vad_started = false;
+
     mutable std::mutex mutex;
     std::condition_variable cv;
     std::deque<UserTask> user_tasks;
@@ -146,6 +159,10 @@ struct ConversationSession::Impl {
     std::thread tts_thread;
     std::thread audio_thread;
     std::thread video_thread;
+    bool generation_exited = true;
+    bool tts_exited = true;
+    bool audio_exited = true;
+    bool video_exited = true;
 
     bool started = false;
     bool stopping = false;
@@ -159,6 +176,7 @@ struct ConversationSession::Impl {
     bool audio_done = true;
     /// 标记当前 turn 已进入失败终态，使后续错误回调被去重（只产生一次终态事件）。
     bool turn_failed = false;
+    bool failure_callback_pending = false;
     uint64_t current_task_id = 0;
     uint64_t next_task_id = 1;
 
@@ -193,37 +211,103 @@ struct ConversationSession::Impl {
         return stopping || cancel_current || current_task_id != task_id;
     }
 
-    /// 不可恢复错误回调（去重）：同一 turn 只产生一次 on_error 终态事件。
-    void ReportError(uint64_t task_id, const std::string& error) {
-        auto callback = callbacks.on_error;
-        if (!callback) return;
-        bool should_fire = false;
-        {
-            std::lock_guard<std::mutex> lock(mutex);
-            if (!turn_failed) {
-                turn_failed = true;
-                should_fire = true;
-            }
-        }
-        if (should_fire) callback(task_id, error);
-    }
-
     /// 将当前 turn 置入失败终态：取消 LLM/TTS/剩余 PCM，清除队列并尝试完成 turn。
-    /// 由媒体供料失败（PushAudio/PushVideo）路径调用。已失败时去重。
+    /// 所有不可恢复错误都走同一路径，同一 turn 只产生一次 on_error。
     void FailTurn(uint64_t task_id, const std::string& error) {
+        std::function<void(uint64_t, const std::string&)> callback;
         {
             std::unique_lock<std::mutex> lock(mutex);
             if (turn_failed) return;
             turn_failed = true;
+            failure_callback_pending = true;
             cancel_current = true;
+            user_tasks.clear();
             sentence_jobs.clear();
             audio_chunks.clear();
+            generation_done = !generation_active;
             tts_done = !tts_active;
-            audio_done = true;
+            audio_done = !audio_active;
             SetState(SessionState::FAILED);
+            callback = callbacks.on_error;
+        }
+        MetricsRegistry::instance().record_turn_complete(false, false);
+        if (callback) callback(task_id, error);
+        {
+            std::unique_lock<std::mutex> lock(mutex);
+            failure_callback_pending = false;
             MaybeCompleteTurn(lock);
         }
-        ReportError(task_id, error);
+        cv.notify_all();
+    }
+
+    /// History 预算截断（P1-3.10a）：按轮次/字符/token 三重限制裁剪历史，
+    /// 防止多轮对话导致 LLM 上下文溢出和无界内存增长。
+    /// 在持有 mutex 时调用。
+    void TrimHistory() {
+        // 1. 按轮次截断：1 轮 = 1 user + 1 assistant = 2 条消息
+        const int max_messages = config.max_history_turns * 2;
+        if (max_messages > 0
+            && static_cast<int>(history.size()) > max_messages) {
+            history.erase(history.begin(),
+                          history.begin() + (history.size() - max_messages));
+        }
+        // 2. 按字符截断：从最旧消息开始删除
+        size_t total_chars = 0;
+        for (const auto& msg : history) total_chars += msg.content.size();
+        while (total_chars > static_cast<size_t>(config.max_history_chars)
+               && history.size() > 2) {
+            total_chars -= history.front().content.size();
+            history.erase(history.begin());
+        }
+        // 3. token 估算（粗略：chars / 3.5 for CJK, chars / 4 for Latin）
+        if (config.max_history_tokens_estimate > 0) {
+            int estimated_tokens = static_cast<int>(total_chars / 3.5);
+            while (estimated_tokens > config.max_history_tokens_estimate
+                   && history.size() > 2) {
+                total_chars -= history.front().content.size();
+                history.erase(history.begin());
+                estimated_tokens = static_cast<int>(total_chars / 3.5);
+            }
+        }
+        MetricsRegistry::instance().record_history_length(history.size());
+    }
+
+    /// Barge-in 处理（P1-3.10c）：VAD 检测到用户语音时自动打断当前回复。
+    /// 流程：取消 LLM/TTS → 清理 PCM → 重对齐时间轴 → 进入 INTERRUPTING →
+    ///       尝试完成当前 turn → 上报指标。
+    /// 仅在 enable_barge_in 且处于 PLAYING/SYNTHESIZING 时触发，
+    /// 避免在 IDLE 或已中断状态下重复触发。
+    void OnBargeIn() {
+        std::unique_lock<std::mutex> lock(mutex);
+        if (!config.enable_barge_in || !busy || turn_failed) return;
+        if (state != SessionState::PLAYING
+            && state != SessionState::SYNTHESIZING
+            && state != SessionState::GENERATING) {
+            return;
+        }
+        DH_LOG_INFO("dialog.session")
+            << "barge-in triggered (state="
+            << static_cast<int>(state) << ")";
+
+        // 1. 取消当前 LLM/TTS（复用 Interrupt 逻辑）
+        cancel_current = true;
+        sentence_jobs.clear();
+        audio_chunks.clear();
+        tts_done = !tts_active;
+        audio_done = !audio_active;
+
+        // 2. 重对齐音频时间轴：清除已提交音频的 PTS 基准，
+        //    使下一个 turn 从零开始，避免旧 turn 的音频残留影响同步。
+        audio_sample_cursor = 0;
+        audio_submitted_until_ms = 0;
+        turn_audio_start_ms = 0;
+        video_frame_cursor = 0;
+        next_video_pts_ms = 0;
+
+        // 3. 进入 INTERRUPTING 状态，尝试完成当前 turn
+        SetState(SessionState::INTERRUPTING);
+        MetricsRegistry::instance().record_barge_in();
+        MaybeCompleteTurn(lock);
         cv.notify_all();
     }
 
@@ -260,7 +344,8 @@ struct ConversationSession::Impl {
     }
 
     void MaybeCompleteTurn(std::unique_lock<std::mutex>& lock) {
-        if (!busy || generation_active || tts_active || audio_active
+        if (!busy || failure_callback_pending
+            || generation_active || tts_active || audio_active
             || !generation_done || !tts_done || !audio_done
             || !user_tasks.empty() || !sentence_jobs.empty()
             || !audio_chunks.empty()) {
@@ -276,14 +361,24 @@ struct ConversationSession::Impl {
         }
 
         const uint64_t completed_id = current_task_id;
-        // 注意：turn_failed 不在此处重置。它由 SubmitUserText 在新 turn 开始时重置，
-        // 以保证同一 turn 内多次媒体错误只产生一次 on_error 终态事件（去重）。
+        if (turn_failed) {
+            busy = false;
+            current_task_id = 0;
+            SetState(SessionState::FAILED);
+            lock.unlock();
+            cv.notify_all();
+            lock.lock();
+            return;
+        }
+        const bool was_interrupted = state == SessionState::INTERRUPTING;
         busy = false;
         cancel_current = false;
         current_task_id = 0;
         SetState(SessionState::IDLE);
         auto callback = callbacks.on_turn_complete;
         lock.unlock();
+        MetricsRegistry::instance().record_turn_complete(!was_interrupted,
+                                                         was_interrupted);
         if (callback) callback(completed_id);
         lock.lock();
         cv.notify_all();
@@ -310,8 +405,19 @@ struct ConversationSession::Impl {
             SentenceSegmenter segmenter(
                 SentenceSegmenterConfig{config.min_tts_clause_chars});
             std::string full_reply;
+            LogContext log_context(config.session_id, task.id);
+            auto& metrics = MetricsRegistry::instance();
+            metrics.record_llm_request_start();
+            const auto llm_started = std::chrono::steady_clock::now();
+            bool first_token_recorded = false;
             auto on_delta = [&](const std::string& delta) {
                 if (IsCancelled(task.id)) return;
+                if (!first_token_recorded && !delta.empty()) {
+                    first_token_recorded = true;
+                    metrics.record_llm_first_token(
+                        std::chrono::duration<double, std::milli>(
+                            std::chrono::steady_clock::now() - llm_started).count());
+                }
                 full_reply += delta;
                 auto callback = callbacks.on_text_delta;
                 if (callback) callback(task.id, delta);
@@ -324,8 +430,10 @@ struct ConversationSession::Impl {
             const bool ok = text_client.Generate(
                 request, on_delta, cancelled, error);
             const bool was_cancelled = cancelled();
+            const double llm_total_ms = std::chrono::duration<double, std::milli>(
+                std::chrono::steady_clock::now() - llm_started).count();
 
-            if (!was_cancelled) {
+            if (ok && !was_cancelled) {
                 auto tail = segmenter.Flush();
                 if (!tail.empty()) {
                     EnqueueSentence(task.id, std::move(tail), false);
@@ -340,18 +448,32 @@ struct ConversationSession::Impl {
                 if (ok && !was_cancelled) {
                     history.push_back(ChatMessage{"user", task.text});
                     history.push_back(ChatMessage{"assistant", full_reply});
+                    TrimHistory();
                 } else if (was_cancelled) {
                     sentence_jobs.clear();
                     tts_done = !tts_active;
                     audio_done = audio_chunks.empty() && !audio_active;
                 }
-                MaybeCompleteTurn(lock);
+                if (ok || was_cancelled) MaybeCompleteTurn(lock);
             }
             if (!ok && !was_cancelled) {
-                ReportError(task.id,
+                metrics.record_llm_failed();
+                FailTurn(task.id,
                     error.empty() ? "text generation failed" : error);
+            } else if (was_cancelled) {
+                metrics.record_llm_cancelled(llm_total_ms);
             } else if (ok && !was_cancelled && callbacks.on_reply_ready) {
+                const double seconds = llm_total_ms / 1000.0;
+                const double estimated_tokens = full_reply.size() / 4.0;
+                metrics.record_llm_complete(
+                    llm_total_ms, seconds > 0.0 ? estimated_tokens / seconds : 0.0, 0);
                 callbacks.on_reply_ready(task.id, full_reply);
+            } else if (ok && !was_cancelled) {
+                const double seconds = llm_total_ms / 1000.0;
+                metrics.record_llm_complete(
+                    llm_total_ms,
+                    seconds > 0.0 ? (full_reply.size() / 4.0) / seconds : 0.0,
+                    0);
             }
             cv.notify_all();
         }
@@ -369,6 +491,7 @@ struct ConversationSession::Impl {
                 job = std::move(sentence_jobs.front());
                 sentence_jobs.pop_front();
             }
+            LogContext log_context(config.session_id, job.task_id);
 
             if (job.end_of_reply) {
                 const int silence_samples = config.audio_sample_rate
@@ -401,7 +524,19 @@ struct ConversationSession::Impl {
                 }
             }
             auto cancelled = [&]() { return IsCancelled(job.task_id); };
+            auto& metrics = MetricsRegistry::instance();
+            metrics.record_tts_request_start();
+            const auto tts_started = std::chrono::steady_clock::now();
+            bool first_pcm_recorded = false;
+            uint64_t total_samples = 0;
             auto on_audio = [&](tts::PCMChunk chunk) {
+                if (!first_pcm_recorded && !chunk.samples.empty()) {
+                    first_pcm_recorded = true;
+                    metrics.record_tts_first_pcm(
+                        std::chrono::duration<double, std::milli>(
+                            std::chrono::steady_clock::now() - tts_started).count());
+                }
+                total_samples += chunk.samples.size();
                 return EnqueueAudio(job.task_id, std::move(chunk));
             };
             std::string error;
@@ -416,8 +551,20 @@ struct ConversationSession::Impl {
                 }
             }
             if (!ok && !cancelled()) {
-                ReportError(job.task_id,
+                metrics.record_tts_failed();
+                FailTurn(job.task_id,
                     error.empty() ? "TTS synthesis failed" : error);
+            } else if (ok) {
+                const double elapsed_ms = std::chrono::duration<double, std::milli>(
+                    std::chrono::steady_clock::now() - tts_started).count();
+                const double audio_ms = config.audio_sample_rate > 0
+                    ? static_cast<double>(total_samples) * 1000.0
+                        / static_cast<double>(config.audio_sample_rate
+                                              * config.audio_channels)
+                    : 0.0;
+                metrics.record_tts_complete(
+                    audio_ms > 0.0 ? elapsed_ms / audio_ms : 0.0,
+                    total_samples);
             }
             cv.notify_all();
         }
@@ -579,14 +726,46 @@ bool ConversationSession::Start(const ConversationConfig& config,
     impl_->started = true;
     impl_->stopping = false;
     impl_->turn_failed = false;
+    impl_->failure_callback_pending = false;
     impl_->stop_deadline = std::chrono::steady_clock::time_point::max();
+    impl_->generation_exited = false;
+    impl_->tts_exited = false;
+    impl_->audio_exited = false;
+    impl_->video_exited = false;
     impl_->SetState(SessionState::IDLE);
     impl_->generation_thread = std::thread([this]() {
         impl_->GenerationLoop();
+        {
+            std::lock_guard<std::mutex> lock(impl_->mutex);
+            impl_->generation_exited = true;
+        }
+        impl_->cv.notify_all();
     });
-    impl_->tts_thread = std::thread([this]() { impl_->TTSLoop(); });
-    impl_->audio_thread = std::thread([this]() { impl_->AudioLoop(); });
-    impl_->video_thread = std::thread([this]() { impl_->VideoLoop(); });
+    impl_->tts_thread = std::thread([this]() {
+        impl_->TTSLoop();
+        {
+            std::lock_guard<std::mutex> lock(impl_->mutex);
+            impl_->tts_exited = true;
+        }
+        impl_->cv.notify_all();
+    });
+    impl_->audio_thread = std::thread([this]() {
+        impl_->AudioLoop();
+        {
+            std::lock_guard<std::mutex> lock(impl_->mutex);
+            impl_->audio_exited = true;
+        }
+        impl_->cv.notify_all();
+    });
+    impl_->video_thread = std::thread([this]() {
+        impl_->VideoLoop();
+        {
+            std::lock_guard<std::mutex> lock(impl_->mutex);
+            impl_->video_exited = true;
+        }
+        impl_->cv.notify_all();
+    });
+    MetricsRegistry::instance().record_session_start();
     return true;
 }
 
@@ -619,6 +798,7 @@ uint64_t ConversationSession::SubmitUserText(const std::string& text) {
     impl_->busy = true;
     impl_->cancel_current = false;
     impl_->turn_failed = false;
+    impl_->failure_callback_pending = false;
     impl_->generation_done = false;
     impl_->tts_done = false;
     impl_->audio_done = false;
@@ -678,12 +858,31 @@ StopResult ConversationSession::Stop(bool drain,
         }
     }
     impl_->cv.notify_all();
-    // 工作线程的阻塞等待均检查 stopping / stop_deadline，可在 deadline 内退出。
+    // 先等待线程报告退出，再 join；超时时保留 thread 所有权供后续 Stop 重试。
+    {
+        std::unique_lock<std::mutex> lock(impl_->mutex);
+        const bool workers_exited = impl_->cv.wait_until(
+            lock, impl_->stop_deadline, [&]() {
+                return impl_->generation_exited && impl_->tts_exited
+                    && impl_->audio_exited && impl_->video_exited;
+            });
+        if (!workers_exited) return StopResult::Timeout;
+    }
     if (impl_->generation_thread.joinable()) impl_->generation_thread.join();
     if (impl_->tts_thread.joinable()) impl_->tts_thread.join();
     if (impl_->audio_thread.joinable()) impl_->audio_thread.join();
     if (impl_->video_thread.joinable()) impl_->video_thread.join();
     impl_->media_sink.Finish();
+    // 回收 ASR/VAD（P1-3.10c）：工作线程退出后再停止，避免回调竞争
+    if (impl_->streaming_vad && impl_->vad_started) {
+        impl_->streaming_vad->Stop();
+        impl_->vad_started = false;
+    }
+    if (impl_->asr_client && impl_->asr_started) {
+        std::string asr_err;
+        impl_->asr_client->Stop(asr_err);
+        impl_->asr_started = false;
+    }
     {
         std::lock_guard<std::mutex> lock(impl_->mutex);
         impl_->started = false;
@@ -691,6 +890,7 @@ StopResult ConversationSession::Stop(bool drain,
         impl_->stop_deadline = std::chrono::steady_clock::time_point::max();
         impl_->SetState(SessionState::STOPPED);
     }
+    MetricsRegistry::instance().record_session_end();
     impl_->cv.notify_all();
     return result;
 }
@@ -703,6 +903,81 @@ bool ConversationSession::IsBusy() const {
 SessionState ConversationSession::State() const {
     std::lock_guard<std::mutex> lock(impl_->mutex);
     return impl_->state;
+}
+
+void ConversationSession::SetASRClient(IASRClient* client) {
+    std::lock_guard<std::mutex> lock(impl_->mutex);
+    // 解除旧绑定：若已 Start 则先 Stop
+    if (impl_->asr_client && impl_->asr_started) {
+        std::string err;
+        impl_->asr_client->Stop(err);
+        impl_->asr_started = false;
+    }
+    impl_->asr_client = client;
+    if (client && impl_->started && !impl_->stopping) {
+        auto on_transcript = [this](const Transcript& t) {
+            // ASR 最终结果可作为新 turn 的用户输入
+            if (t.is_final && !t.text.empty()) {
+                // 通过 callbacks 通知上层，由上层决定是否 SubmitUserText
+                // 此处不直接调用 SubmitUserText，避免在 ASR 回调线程中重入
+                auto cb = impl_->callbacks.on_text_delta;
+                // ASR 结果暂不自动提交，留给上层处理
+                (void)cb;
+            }
+        };
+        auto cancelled = [this]() {
+            std::lock_guard<std::mutex> lk(impl_->mutex);
+            return impl_->stopping;
+        };
+        std::string err;
+        impl_->asr_started = client->Start(on_transcript, cancelled, err);
+        if (!impl_->asr_started) {
+            DH_LOG_WARN("dialog.session")
+                << "ASR Start failed: " << err;
+        }
+    }
+}
+
+void ConversationSession::SetStreamingVAD(audio::IStreamingVAD* vad) {
+    std::lock_guard<std::mutex> lock(impl_->mutex);
+    // 解除旧绑定：若已 Start 则先 Stop
+    if (impl_->streaming_vad && impl_->vad_started) {
+        impl_->streaming_vad->Stop();
+        impl_->vad_started = false;
+    }
+    impl_->streaming_vad = vad;
+    if (vad && impl_->started && !impl_->stopping) {
+        auto on_event = [this](audio::VADEvent event) {
+            if (event == audio::VADEvent::VoiceStart) {
+                impl_->OnBargeIn();
+            }
+        };
+        impl_->vad_started = vad->Start(on_event);
+        if (!impl_->vad_started) {
+            DH_LOG_WARN("dialog.session") << "VAD Start failed";
+        }
+    }
+}
+
+bool ConversationSession::PushUserAudio(const float* samples,
+                                        size_t sample_count,
+                                        std::string& error) {
+    if (!samples || sample_count == 0) {
+        error = "PushUserAudio: null samples or zero count";
+        return false;
+    }
+    // 不持锁地转发音频，避免 ASR/VAD 内部处理阻塞会话线程
+    if (impl_->asr_client && impl_->asr_started) {
+        std::string asr_err;
+        if (!impl_->asr_client->PushAudio(samples, sample_count, asr_err)) {
+            DH_LOG_WARN("dialog.session")
+                << "ASR PushAudio failed: " << asr_err;
+        }
+    }
+    if (impl_->streaming_vad && impl_->vad_started) {
+        impl_->streaming_vad->PushAudio(samples, sample_count);
+    }
+    return true;
 }
 
 }  // namespace dialog

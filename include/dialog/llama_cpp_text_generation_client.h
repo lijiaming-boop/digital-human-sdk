@@ -30,7 +30,7 @@ struct LlamaCppTextGenerationConfig {
 
 /// Adapts llama.cpp server's /v1/chat/completions API to the model-independent
 /// ITextGenerationClient consumed by ConversationSession.
-class LlamaCppTextGenerationClient final : public ITextGenerationClient {
+class DH_API LlamaCppTextGenerationClient final : public ITextGenerationClient {
 public:
     explicit LlamaCppTextGenerationClient(
         LlamaCppTextGenerationConfig config = {});

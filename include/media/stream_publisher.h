@@ -8,6 +8,8 @@
 
 #include <opencv2/core.hpp>
 
+#include "digital_human/export.h"
+
 namespace digital_human {
 namespace media {
 
@@ -60,7 +62,7 @@ struct StreamPublisherMetrics {
 ///
 /// RTMP uses FLV + H.264 + AAC. RTSP uses the FFmpeg RTSP muxer and requires
 /// an RTSP server that accepts publishing. FILE is primarily used for tests.
-class StreamPublisher {
+class DH_API StreamPublisher {
 public:
     StreamPublisher();
     ~StreamPublisher();

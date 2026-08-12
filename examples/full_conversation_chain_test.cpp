@@ -15,7 +15,7 @@ extern "C" {
 #include "media/conversation_stream_bridge.h"
 #include "media/stream_publisher.h"
 #include "network/http_client.h"
-#include "tts/tts_client.h"
+#include "tts/http_tts_client.h"
 
 using namespace digital_human;
 namespace fs = std::filesystem;

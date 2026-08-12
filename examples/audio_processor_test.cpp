@@ -101,8 +101,8 @@ static void testConfig() {
     // AutoConfigure
     AudioProcessorConfig auto_cfg;
     auto_cfg.AutoConfigure(16000);
-    TEST_CHECK(auto_cfg.frame_size == 400, "1.4 AutoConfigure 16kHz frame_size=400");
-    TEST_CHECK(auto_cfg.hop_size == 160, "1.5 AutoConfigure 16kHz hop_size=160");
+    TEST_CHECK(auto_cfg.frame_size == 800, "1.4 AutoConfigure 16kHz frame_size=800");
+    TEST_CHECK(auto_cfg.hop_size == 200, "1.5 AutoConfigure 16kHz hop_size=200");
 }
 
 // ============================================================================

@@ -7,6 +7,8 @@
 
 #include <opencv2/core.hpp>
 
+#include "digital_human/export.h"
+
 namespace digital_human {
 namespace avatar {
 
@@ -42,14 +44,14 @@ struct AvatarImage {
 };
 
 /// Decodes untrusted JPEG/PNG upload bytes into an independently-owned BGR frame.
-bool DecodeAvatarUpload(const std::vector<uint8_t>& encoded,
+DH_API bool DecodeAvatarUpload(const std::vector<uint8_t>& encoded,
                         const std::string& content_type,
                         const AvatarUploadLimits& limits,
                         AvatarImage& image,
                         std::string& error);
 
 /// Loads a persisted avatar file through the same validation path as uploads.
-bool LoadAvatarImage(const std::string& path,
+DH_API bool LoadAvatarImage(const std::string& path,
                      const AvatarUploadLimits& limits,
                      AvatarImage& image,
                      std::string& error);

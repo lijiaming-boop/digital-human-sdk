@@ -5,6 +5,8 @@
 #include <iostream>
 #include <limits>
 
+#include "digital_human/log_macros.h"
+
 namespace digital_human {
 namespace core {
 
@@ -101,16 +103,16 @@ void AVSync::Init(const SyncConfig& config) {
     impl_->initialized  = true;
 
     if (impl_->config.audio_sample_rate <= 0) {
-        std::cerr << "[AVSync] Init: 无效的 audio_sample_rate ("
-                  << impl_->config.audio_sample_rate << ")，使用默认 16000" << std::endl;
+        DH_LOG_WARN("av_sync") << "Init: 无效的 audio_sample_rate ("
+                  << impl_->config.audio_sample_rate << ")，使用默认 16000";
         impl_->config.audio_sample_rate = 16000;
     }
     if (impl_->config.sync_threshold_ms <= 0.0) {
-        std::cerr << "[AVSync] Init: sync_threshold_ms <= 0，使用默认 30ms" << std::endl;
+        DH_LOG_WARN("av_sync") << "Init: sync_threshold_ms <= 0，使用默认 30ms";
         impl_->config.sync_threshold_ms = 30.0;
     }
     if (impl_->config.max_drift_ms <= 0.0) {
-        std::cerr << "[AVSync] Init: max_drift_ms <= 0，使用默认 100ms" << std::endl;
+        DH_LOG_WARN("av_sync") << "Init: max_drift_ms <= 0，使用默认 100ms";
         impl_->config.max_drift_ms = 100.0;
     }
 }
@@ -123,11 +125,11 @@ bool AVSync::IsInitialized() const {
 
 void AVSync::UpdateAudioClock(int64_t samples_consumed) {
     if (!impl_->initialized) {
-        std::cerr << "[AVSync] UpdateAudioClock: 未初始化" << std::endl;
+        DH_LOG_ERROR("av_sync") << "UpdateAudioClock: 未初始化";
         return;
     }
     if (samples_consumed < 0) {
-        std::cerr << "[AVSync] UpdateAudioClock: samples_consumed 不能为负" << std::endl;
+        DH_LOG_ERROR("av_sync") << "UpdateAudioClock: samples_consumed 不能为负";
         return;
     }
 
@@ -138,7 +140,7 @@ void AVSync::UpdateAudioClock(int64_t samples_consumed) {
 
 void AVSync::SetAudioClockMs(double ms) {
     if (!impl_->initialized) {
-        std::cerr << "[AVSync] SetAudioClockMs: 未初始化" << std::endl;
+        DH_LOG_ERROR("av_sync") << "SetAudioClockMs: 未初始化";
         return;
     }
     impl_->audio_clock_ms = ms;
@@ -152,7 +154,7 @@ double AVSync::GetAudioClockMs() const {
 
 SyncResult AVSync::GetSyncStatus(double video_pts_ms) const {
     if (!impl_->initialized) {
-        std::cerr << "[AVSync] GetSyncStatus: 未初始化" << std::endl;
+        DH_LOG_ERROR("av_sync") << "GetSyncStatus: 未初始化";
         return SyncResult();
     }
     return impl_->doGetSyncStatus(video_pts_ms);

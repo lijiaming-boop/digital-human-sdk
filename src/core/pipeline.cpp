@@ -9,6 +9,8 @@
 #include <thread>
 #include <vector>
 
+#include "digital_human/log_macros.h"
+
 #include "core/audio_processor.h"
 #include "core/video_processor.h"
 #include "core/inference_worker.h"
@@ -523,13 +525,12 @@ bool Pipeline::Init(const PipelineConfig& config) {
     std::lock_guard<std::mutex> lifecycle_lock(impl_->lifecycle_mutex);
 
     if (impl_->initialized.load(std::memory_order_acquire)) {
-        std::cerr << "[Pipeline] Init: duplicate initialization" << std::endl;
+        DH_LOG_ERROR("pipeline") << "Init: duplicate initialization";
         return false;
     }
     if (impl_->terminated.load(std::memory_order_acquire)
         || impl_->stop_requested.load(std::memory_order_acquire)) {
-        std::cerr << "[Pipeline] Init: Pipeline is terminal and cannot be reused"
-                  << std::endl;
+        DH_LOG_ERROR("pipeline") << "Init: Pipeline is terminal and cannot be reused";
         return false;
     }
 
@@ -548,7 +549,7 @@ bool Pipeline::Init(const PipelineConfig& config) {
         || config.video_raw_queue_size < 0 || config.face_queue_size < 0
         || config.infer_queue_size < 0 || config.output_queue_size < 0
         || config.pop_timeout_ms < 0 || config.shutdown_timeout_ms < 0) {
-        std::cerr << "[Pipeline] Init: invalid configuration" << std::endl;
+        DH_LOG_ERROR("pipeline") << "Init: invalid configuration";
         return false;
     }
 
@@ -571,9 +572,9 @@ bool Pipeline::Init(const PipelineConfig& config) {
     impl_->initialized.store(true, std::memory_order_release);
     impl_->RecordLifecycleTransition();
 
-    std::cout << "[Pipeline] 初始化成功: "
+    DH_LOG_INFO("pipeline") << "初始化成功: "
               << config.audio_sample_rate << "Hz, "
-              << config.target_fps << "fps" << std::endl;
+              << config.target_fps << "fps";
     return true;
 }
 
@@ -581,13 +582,12 @@ bool Pipeline::Start() {
     std::lock_guard<std::mutex> lifecycle_lock(impl_->lifecycle_mutex);
 
     if (!impl_->initialized.load(std::memory_order_acquire)) {
-        std::cerr << "[Pipeline] Start: not initialized" << std::endl;
+        DH_LOG_ERROR("pipeline") << "Start: not initialized";
         return false;
     }
     if (impl_->terminated.load(std::memory_order_acquire)
         || impl_->stop_requested.load(std::memory_order_acquire)) {
-        std::cerr << "[Pipeline] Start: Pipeline is terminal, restart rejected"
-                  << std::endl;
+        DH_LOG_ERROR("pipeline") << "Start: Pipeline is terminal, restart rejected";
         return false;
     }
     if (impl_->running.load(std::memory_order_acquire)) {
@@ -601,19 +601,18 @@ bool Pipeline::Start() {
         impl_->stop_requested.store(true, std::memory_order_release);
         impl_->terminated.store(true, std::memory_order_release);
         impl_->RecordLifecycleTransition();
-        std::cerr << "[Pipeline] Start: worker startup failed; Pipeline terminated"
-                  << std::endl;
+        DH_LOG_ERROR("pipeline") << "Start: worker startup failed; Pipeline terminated";
         return false;
     }
 
     impl_->running.store(true, std::memory_order_release);
     impl_->RecordLifecycleTransition();
-    std::cout << "[Pipeline] started (" << impl_->worker_registry.Size()
-              << " workers)" << std::endl;
+    DH_LOG_INFO("pipeline") << "started (" << impl_->worker_registry.Size()
+              << " workers)";
     return true;
 }
 
-bool Pipeline::Stop() {
+bool Pipeline::Stop(int timeout_ms) {
     std::lock_guard<std::mutex> lifecycle_lock(impl_->lifecycle_mutex);
 
     if (!impl_->initialized.load(std::memory_order_acquire)) {
@@ -631,7 +630,7 @@ bool Pipeline::Stop() {
     if (first_request) {
         impl_->RecordLifecycleTransition();
     }
-    std::cout << "[Pipeline] stopping..." << std::endl;
+    DH_LOG_INFO("pipeline") << "stopping...";
     impl_->running.store(false, std::memory_order_release);
 
     if (impl_->audio_processor) {
@@ -650,8 +649,9 @@ bool Pipeline::Stop() {
     impl_->output_frame_queue.Stop();
 
     impl_->worker_registry.RequestStopAll();
-    const auto report = impl_->worker_registry.WaitAllFor(
-        impl_->config.shutdown_timeout_ms);
+    const int effective_timeout_ms = timeout_ms >= 0
+        ? timeout_ms : impl_->config.shutdown_timeout_ms;
+    const auto report = impl_->worker_registry.WaitAllFor(effective_timeout_ms);
     const int64_t elapsed_us = static_cast<int64_t>(std::llround(
         std::chrono::duration<double, std::micro>(
             std::chrono::steady_clock::now() - shutdown_start).count()));
@@ -661,20 +661,19 @@ bool Pipeline::Stop() {
     if (report.all_stopped) {
         impl_->terminated.store(true, std::memory_order_release);
         impl_->RecordLifecycleTransition();
-        std::cout << "[Pipeline] stopped in "
-                  << static_cast<double>(elapsed_us) / 1000.0 << "ms" << std::endl;
+        DH_LOG_INFO("pipeline") << "stopped in "
+                  << static_cast<double>(elapsed_us) / 1000.0 << "ms";
         return true;
     }
 
     impl_->shutdown_timeout_count.fetch_add(1, std::memory_order_relaxed);
-    std::cerr << "[Pipeline] Stop: shutdown timeout after "
+    DH_LOG_ERROR("pipeline") << "Stop: shutdown timeout after "
               << static_cast<double>(elapsed_us) / 1000.0
-              << "ms; workers remain owned" << std::endl;
+              << "ms; workers remain owned";
     for (const auto& worker : report.workers) {
         if (!worker.stopped) {
-            std::cerr << "[Pipeline] Stop: worker '" << worker.name
-                      << "' did not stop within the shared deadline"
-                      << std::endl;
+            DH_LOG_ERROR("pipeline") << "Stop: worker '" << worker.name
+                      << "' did not stop within the shared deadline";
         }
     }
     return false;
@@ -750,7 +749,7 @@ void Pipeline::Pause() {
     }
     if (!impl_->paused.exchange(true, std::memory_order_acq_rel)) {
         impl_->RecordLifecycleTransition();
-        std::cout << "[Pipeline] paused" << std::endl;
+        DH_LOG_INFO("pipeline") << "paused";
     }
 }
 
@@ -761,7 +760,7 @@ void Pipeline::Resume() {
     }
     if (impl_->paused.exchange(false, std::memory_order_acq_rel)) {
         impl_->RecordLifecycleTransition();
-        std::cout << "[Pipeline] resumed" << std::endl;
+        DH_LOG_INFO("pipeline") << "resumed";
     }
 }
 

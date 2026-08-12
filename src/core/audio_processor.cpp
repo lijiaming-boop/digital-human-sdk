@@ -13,6 +13,7 @@
 #include "audio/audio_mel_feature_extract.h"
 #include "audio/audio_cmvn.h"
 #include "audio/audio_ring_buffer.h"
+#include "digital_human/log_macros.h"
 
 namespace digital_human {
 namespace core {
@@ -326,7 +327,7 @@ struct AudioProcessor::Impl {
             result.header.status = StatusCode::OK;
 
         } catch (const std::exception& e) {
-            std::cerr << "[AudioProcessor] 帧处理异常: " << e.what() << std::endl;
+            DH_LOG_ERROR("audio_processor") << "帧处理异常: " << e.what();
             result.header.status = StatusCode::ERROR;
         }
 
@@ -396,7 +397,10 @@ void AudioProcessor::SetAudioSource(const float* data, size_t samples,
     }
 
     impl_->has_fixed_source_ = true;
-    impl_->config.AutoConfigure(rate);
+    // 保留调用方通过 SetConfig 指定的帧参数；仅在输入采样率变化时按时长缩放。
+    if (rate != impl_->config.sample_rate) {
+        impl_->config.AutoConfigure(rate);
+    }
     impl_->InitWindow();
     impl_->file_read_pos_ = 0;
     impl_->read_cursor_   = 0;

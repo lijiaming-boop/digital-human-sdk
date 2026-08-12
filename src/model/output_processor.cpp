@@ -1,4 +1,5 @@
 #include "model/output_processor.h"
+#include "digital_human/log_macros.h"
 
 #include <algorithm>
 #include <cmath>
@@ -46,8 +47,8 @@ struct OutputProcessor::Impl {
      */
     cv::Mat ncnnToCvMat(const ncnn::Mat& src) {
         if (src.empty() || src.c != 3) {
-            std::cerr << "[OutputProcessor] ncnnToCvMat: 输入无效 (empty="
-                      << src.empty() << ", c=" << src.c << ")" << std::endl;
+            DH_LOG_ERROR("model.output_processor") << "ncnnToCvMat: 输入无效 (empty="
+                      << src.empty() << ", c=" << src.c << ")";
             return cv::Mat();
         }
 
@@ -158,12 +159,11 @@ struct OutputProcessor::Impl {
     cv::Mat doInverseTransform(const cv::Mat& face, const cv::Mat& M_inv,
                                const cv::Size& size) {
         if (face.empty() || M_inv.empty()) {
-            std::cerr << "[OutputProcessor] 逆变换失败：输入为空" << std::endl;
+            DH_LOG_ERROR("model.output_processor") << "逆变换失败：输入为空";
             return cv::Mat();
         }
         if (M_inv.rows != 2 || M_inv.cols != 3) {
-            std::cerr << "[OutputProcessor] 逆变换失败：M_inv 必须是 2×3 矩阵"
-                      << std::endl;
+            DH_LOG_ERROR("model.output_processor") << "逆变换失败：M_inv 必须是 2×3 矩阵";
             return cv::Mat();
         }
 
@@ -245,7 +245,7 @@ struct OutputProcessor::Impl {
     cv::Mat doFaceFusion(const cv::Mat& original, const cv::Mat& generated,
                          const cv::Mat& mask) {
         if (original.empty() || generated.empty() || mask.empty()) {
-            std::cerr << "[OutputProcessor] 融合失败：输入为空" << std::endl;
+            DH_LOG_ERROR("model.output_processor") << "融合失败：输入为空";
             return cv::Mat();
         }
 
@@ -364,17 +364,16 @@ OutputProcessor& OutputProcessor::operator=(OutputProcessor&&) noexcept = defaul
 cv::Mat OutputProcessor::OutputToMat(const ncnn::Mat& model_output,
                                       int face_w, int face_h) {
     if (model_output.empty()) {
-        std::cerr << "[OutputProcessor] OutputToMat: ncnn::Mat 为空" << std::endl;
+        DH_LOG_ERROR("model.output_processor") << "OutputToMat: ncnn::Mat 为空";
         return cv::Mat();
     }
     if (model_output.c != 3) {
-        std::cerr << "[OutputProcessor] OutputToMat: 通道数不为 3 (实际 c="
-                  << model_output.c << ")" << std::endl;
+        DH_LOG_ERROR("model.output_processor") << "OutputToMat: 通道数不为 3 (实际 c="
+                  << model_output.c << ")";
         return cv::Mat();
     }
     if (face_w <= 0 || face_h <= 0) {
-        std::cerr << "[OutputProcessor] OutputToMat: 无效的 face_w/face_h"
-                  << std::endl;
+        DH_LOG_ERROR("model.output_processor") << "OutputToMat: 无效的 face_w/face_h";
         return cv::Mat();
     }
 
@@ -395,16 +394,15 @@ cv::Mat OutputProcessor::InverseTransform(const cv::Mat& processed_face,
                                            const cv::Mat& M_inv,
                                            const cv::Size& original_size) {
     if (processed_face.empty()) {
-        std::cerr << "[OutputProcessor] InverseTransform: 输入图像为空" << std::endl;
+        DH_LOG_ERROR("model.output_processor") << "InverseTransform: 输入图像为空";
         return cv::Mat();
     }
     if (M_inv.empty()) {
-        std::cerr << "[OutputProcessor] InverseTransform: M_inv 为空" << std::endl;
+        DH_LOG_ERROR("model.output_processor") << "InverseTransform: M_inv 为空";
         return cv::Mat();
     }
     if (original_size.width <= 0 || original_size.height <= 0) {
-        std::cerr << "[OutputProcessor] InverseTransform: 无效的原始图像尺寸"
-                  << std::endl;
+        DH_LOG_ERROR("model.output_processor") << "InverseTransform: 无效的原始图像尺寸";
         return cv::Mat();
     }
 
@@ -417,20 +415,19 @@ cv::Mat OutputProcessor::FaceFusion(const cv::Mat& original_image,
                                      const cv::Mat& generated_face,
                                      const cv::Mat& face_mask) {
     if (original_image.empty()) {
-        std::cerr << "[OutputProcessor] FaceFusion: 原始图像为空" << std::endl;
+        DH_LOG_ERROR("model.output_processor") << "FaceFusion: 原始图像为空";
         return cv::Mat();
     }
     if (generated_face.empty()) {
-        std::cerr << "[OutputProcessor] FaceFusion: 生成图像为空" << std::endl;
+        DH_LOG_ERROR("model.output_processor") << "FaceFusion: 生成图像为空";
         return cv::Mat();
     }
     if (face_mask.empty()) {
-        std::cerr << "[OutputProcessor] FaceFusion: 遮罩为空" << std::endl;
+        DH_LOG_ERROR("model.output_processor") << "FaceFusion: 遮罩为空";
         return cv::Mat();
     }
     if (original_image.channels() != 3) {
-        std::cerr << "[OutputProcessor] FaceFusion: 原始图像通道数不为 3"
-                  << std::endl;
+        DH_LOG_ERROR("model.output_processor") << "FaceFusion: 原始图像通道数不为 3";
         return cv::Mat();
     }
 
@@ -454,7 +451,7 @@ cv::Mat OutputProcessor::PostProcess(const cv::Mat& fused_image,
                                       bool do_sharpen,
                                       bool do_color_blend) {
     if (fused_image.empty()) {
-        std::cerr << "[OutputProcessor] PostProcess: 融合图像为空" << std::endl;
+        DH_LOG_ERROR("model.output_processor") << "PostProcess: 融合图像为空";
         return cv::Mat();
     }
 
@@ -480,7 +477,7 @@ cv::Mat OutputProcessor::Process(const ncnn::Mat& model_output,
     // 1. 格式转换 + 提取人脸
     cv::Mat face = OutputToMat(model_output, Impl::kDefaultFaceW, Impl::kDefaultFaceH);
     if (face.empty()) {
-        std::cerr << "[OutputProcessor] Process: 格式转换失败" << std::endl;
+        DH_LOG_ERROR("model.output_processor") << "Process: 格式转换失败";
         return cv::Mat();
     }
 
@@ -490,7 +487,7 @@ cv::Mat OutputProcessor::Process(const ncnn::Mat& model_output,
     // 3. 逆变换
     cv::Mat warped = InverseTransform(face_sharpened, M_inv, original_face.size());
     if (warped.empty()) {
-        std::cerr << "[OutputProcessor] Process: 逆变换失败" << std::endl;
+        DH_LOG_ERROR("model.output_processor") << "Process: 逆变换失败";
         return cv::Mat();
     }
 
@@ -498,13 +495,13 @@ cv::Mat OutputProcessor::Process(const ncnn::Mat& model_output,
     cv::Mat fusion_mask = impl_->prepareFusionMask(
         face_mask, face.size(), original_face.size(), M_inv);
     if (fusion_mask.empty()) {
-        std::cerr << "[OutputProcessor] Process: mask prepare failed" << std::endl;
+        DH_LOG_ERROR("model.output_processor") << "Process: mask prepare failed";
         return cv::Mat();
     }
 
     cv::Mat fused = FaceFusion(original_face, warped, fusion_mask);
     if (fused.empty()) {
-        std::cerr << "[OutputProcessor] Process: 融合失败" << std::endl;
+        DH_LOG_ERROR("model.output_processor") << "Process: 融合失败";
         return cv::Mat();
     }
 
@@ -523,7 +520,7 @@ cv::Mat OutputProcessor::ProcessROI(const ncnn::Mat& model_output,
                                      const cv::Rect& face_rect,
                                      float margin_ratio) {
     if (original_face.empty() || M_inv.empty()) {
-        std::cerr << "[OutputProcessor] ProcessROI: 输入为空" << std::endl;
+        DH_LOG_ERROR("model.output_processor") << "ProcessROI: 输入为空";
         return cv::Mat();
     }
 
@@ -531,7 +528,7 @@ cv::Mat OutputProcessor::ProcessROI(const ncnn::Mat& model_output,
     cv::Mat face = OutputToMat(model_output,
                                Impl::kDefaultFaceW, Impl::kDefaultFaceH);
     if (face.empty()) {
-        std::cerr << "[OutputProcessor] ProcessROI: 格式转换失败" << std::endl;
+        DH_LOG_ERROR("model.output_processor") << "ProcessROI: 格式转换失败";
         return cv::Mat();
     }
 
@@ -581,7 +578,7 @@ cv::Mat OutputProcessor::ProcessROI(const ncnn::Mat& model_output,
     // 4. 逆变换到 ROI 画布（用锐化后的 face）
     cv::Mat warped = impl_->doInverseTransform(face_sharpened, M_roi, roi.size());
     if (warped.empty()) {
-        std::cerr << "[OutputProcessor] ProcessROI: 逆变换失败" << std::endl;
+        DH_LOG_ERROR("model.output_processor") << "ProcessROI: 逆变换失败";
         return cv::Mat();
     }
 
@@ -596,8 +593,7 @@ cv::Mat OutputProcessor::ProcessROI(const ncnn::Mat& model_output,
             face_mask, face.size(), roi.size(), M_roi);
     }
     if (fusion_mask.empty()) {
-        std::cerr << "[OutputProcessor] ProcessROI: mask prepare failed"
-                  << std::endl;
+        DH_LOG_ERROR("model.output_processor") << "ProcessROI: mask prepare failed";
         return cv::Mat();
     }
 
@@ -605,7 +601,7 @@ cv::Mat OutputProcessor::ProcessROI(const ncnn::Mat& model_output,
     cv::Mat orig_roi = original_face(roi);
     cv::Mat fused = FaceFusion(orig_roi, warped, fusion_mask);
     if (fused.empty()) {
-        std::cerr << "[OutputProcessor] ProcessROI: 融合失败" << std::endl;
+        DH_LOG_ERROR("model.output_processor") << "ProcessROI: 融合失败";
         return cv::Mat();
     }
 

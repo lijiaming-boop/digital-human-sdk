@@ -1,6 +1,8 @@
 #include "network/http_client.h"
 
 #include <mutex>
+#include <algorithm>
+#include <cctype>
 #include <utility>
 
 #ifdef DIGITAL_HUMAN_HAS_CURL
@@ -17,7 +19,33 @@ struct TransferContext {
     const DataCallback* on_data = nullptr;
     const CancelCheck* cancelled = nullptr;
     bool callback_failed = false;
+    bool header_failed = false;
+    const HttpRequest* request = nullptr;
+    HttpResponseInfo* response = nullptr;
 };
+
+size_t WriteHeader(char* data, size_t size, size_t count, void* user_data) {
+    auto* ctx = static_cast<TransferContext*>(user_data);
+    const size_t bytes = size * count;
+    std::string line(data, bytes);
+    std::string lower = line;
+    std::transform(lower.begin(), lower.end(), lower.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    constexpr const char* prefix = "content-type:";
+    if (lower.rfind(prefix, 0) == 0) {
+        std::string value = line.substr(std::char_traits<char>::length(prefix));
+        const auto begin = value.find_first_not_of(" \t");
+        const auto end = value.find_last_not_of(" \t\r\n");
+        value = begin == std::string::npos ? "" : value.substr(begin, end - begin + 1);
+        if (ctx->response) ctx->response->content_type = value;
+        if (ctx->request && ctx->request->content_type_validator
+            && !ctx->request->content_type_validator(value)) {
+            ctx->header_failed = true;
+            return 0;
+        }
+    }
+    return bytes;
+}
 
 size_t WriteData(char* data, size_t size, size_t count, void* user_data) {
     auto* ctx = static_cast<TransferContext*>(user_data);
@@ -86,7 +114,7 @@ bool HttpClient::Post(const HttpRequest& request,
     for (const auto& header : request.headers) {
         headers = curl_slist_append(headers, header.c_str());
     }
-    TransferContext ctx{&on_data, &cancelled, false};
+    TransferContext ctx{&on_data, &cancelled, false, false, &request, &response};
     char curl_error[CURL_ERROR_SIZE] = {};
 
     curl_easy_setopt(curl, CURLOPT_URL, request.url.c_str());
@@ -97,6 +125,8 @@ bool HttpClient::Post(const HttpRequest& request,
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteData);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &ctx);
+    curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, WriteHeader);
+    curl_easy_setopt(curl, CURLOPT_HEADERDATA, &ctx);
     curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, TransferProgress);
     curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &ctx);
     curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
@@ -143,6 +173,8 @@ bool HttpClient::Post(const HttpRequest& request,
     if (result != CURLE_OK) {
         if (cancelled && cancelled()) {
             error = "HTTP request cancelled";
+        } else if (ctx.header_failed) {
+            error = "HTTP response Content-Type rejected";
         } else if (ctx.callback_failed) {
             error = "HTTP response callback rejected data";
         } else if (curl_error[0] != '\0') {

@@ -185,7 +185,7 @@ struct DigitalHumanSDK::Impl {
         return SDKError::OK;
     }
 
-    SDKError StopUnlocked() {
+    SDKError StopUnlocked(int timeout_ms = -1) {
         const SDKState current = state.load(std::memory_order_acquire);
         if (current == SDKState::UNINITIALIZED || current == SDKState::STOPPED) {
             return SDKError::OK;
@@ -193,7 +193,7 @@ struct DigitalHumanSDK::Impl {
         if (current != SDKState::STOPPING) {
             TransitionStateUnlocked(SDKState::STOPPING);
         }
-        if (pipeline && !pipeline->Stop()) {
+        if (pipeline && !pipeline->Stop(timeout_ms)) {
             return Fail(SDKError::SHUTDOWN_TIMEOUT,
                         "Stop: shutdown timeout; call Stop again to retry");
         }
@@ -323,9 +323,9 @@ SDKError DigitalHumanSDK::Start() {
     return impl_->StartUnlocked();
 }
 
-SDKError DigitalHumanSDK::Stop() {
+SDKError DigitalHumanSDK::Stop(int timeout_ms) {
     std::lock_guard<std::mutex> lifecycle_lock(impl_->lifecycle_mutex);
-    return impl_->StopUnlocked();
+    return impl_->StopUnlocked(timeout_ms);
 }
 
 SDKError DigitalHumanSDK::Pause() {

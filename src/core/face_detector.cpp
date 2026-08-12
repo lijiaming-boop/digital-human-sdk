@@ -11,6 +11,8 @@
 #include <opencv2/dnn.hpp>
 #include <opencv2/imgproc.hpp>
 
+#include "digital_human/log_macros.h"
+
 namespace digital_human {
 namespace core {
 namespace {
@@ -70,9 +72,9 @@ cv::Mat EnsureBgr8(const cv::Mat& image, const char* operation) {
     } else if (image.type() == CV_8UC4) {
         cv::cvtColor(image, bgr, cv::COLOR_BGRA2BGR);
     } else {
-        std::cerr << "[FaceDetector] " << operation
+        DH_LOG_ERROR("face_detector") << operation
                   << ": expected CV_8UC1, CV_8UC3, or CV_8UC4; got type "
-                  << image.type() << std::endl;
+                  << image.type();
     }
     return bgr;
 }
@@ -93,9 +95,9 @@ struct FaceDetector::Impl {
             !std::filesystem::is_regular_file(detector_param) ||
             !std::filesystem::is_regular_file(detector_bin) ||
             !std::filesystem::is_regular_file(landmark_onnx)) {
-            std::cerr << "[FaceDetector] model directory must contain "
+            DH_LOG_ERROR("face_detector") << "model directory must contain "
                       << "scrfd_2.5g_kps-opt2.param/.bin and 2d106det.onnx: "
-                      << model_dir << std::endl;
+                      << model_dir;
             model_loaded = false;
             return false;
         }
@@ -104,7 +106,7 @@ struct FaceDetector::Impl {
         landmark_net = cv::dnn::Net();
         if (detector_net.load_param(detector_param.string().c_str()) != 0 ||
             detector_net.load_model(detector_bin.string().c_str()) != 0) {
-            std::cerr << "[FaceDetector] failed to load SCRFD model from " << model_dir << std::endl;
+            DH_LOG_ERROR("face_detector") << "failed to load SCRFD model from " << model_dir;
             model_loaded = false;
             return false;
         }
@@ -112,7 +114,7 @@ struct FaceDetector::Impl {
         try {
             landmark_net = cv::dnn::readNetFromONNX(landmark_onnx.string());
         } catch (const cv::Exception& e) {
-            std::cerr << "[FaceDetector] failed to load 2D106 model: " << e.what() << std::endl;
+            DH_LOG_ERROR("face_detector") << "failed to load 2D106 model: " << e.what();
             detector_net.clear();
             model_loaded = false;
             return false;
@@ -153,7 +155,7 @@ struct FaceDetector::Impl {
     std::vector<cv::Rect> detect(const cv::Mat& image) const {
         std::vector<cv::Rect> faces;
         if (!model_loaded) {
-            std::cerr << "[FaceDetector] model is not loaded" << std::endl;
+            DH_LOG_ERROR("face_detector") << "model is not loaded";
             return faces;
         }
 
@@ -178,7 +180,7 @@ struct FaceDetector::Impl {
 
         ncnn::Extractor extractor = detector_net.create_extractor();
         if (extractor.input("input.1", padded) != 0) {
-            std::cerr << "[FaceDetector] SCRFD input blob 'input.1' is unavailable" << std::endl;
+            DH_LOG_ERROR("face_detector") << "SCRFD input blob 'input.1' is unavailable";
             return faces;
         }
 
@@ -190,8 +192,8 @@ struct FaceDetector::Impl {
             const std::string box_name = "bbox_" + std::to_string(stride);
             if (extractor.extract(score_name.c_str(), scores) != 0 ||
                 extractor.extract(box_name.c_str(), boxes) != 0) {
-                std::cerr << "[FaceDetector] unsupported SCRFD model outputs; expected score_"
-                          << stride << " and bbox_" << stride << std::endl;
+                DH_LOG_ERROR("face_detector") << "unsupported SCRFD model outputs; expected score_"
+                          << stride << " and bbox_" << stride;
                 return {};
             }
             GenerateProposals(scores, boxes, stride, proposals);
@@ -250,13 +252,13 @@ struct FaceDetector::Impl {
             landmark_net.setInput(blob);
             output = landmark_net.forward();
         } catch (const cv::Exception& e) {
-            std::cerr << "[FaceDetector] 2D106 inference failed: " << e.what() << std::endl;
+            DH_LOG_ERROR("face_detector") << "2D106 inference failed: " << e.what();
             return {};
         }
 
         if (output.total() != 212) {
-            std::cerr << "[FaceDetector] 2D106 output must contain 212 values; got "
-                      << output.total() << std::endl;
+            DH_LOG_ERROR("face_detector") << "2D106 output must contain 212 values; got "
+                      << output.total();
             return {};
         }
         const cv::Mat flat = output.reshape(1, 1);

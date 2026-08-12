@@ -1,4 +1,5 @@
 #include "audio/audio_ring_buffer.h"
+#include "digital_human/log_macros.h"
 
 #include <atomic>
 #include <cstdint>
@@ -22,7 +23,7 @@ struct RingBuffer::Impl {
         , writeIdx(0)
         , readIdx(0) {
         if (cap == 0) {
-            std::cerr << "[RingBuffer] 警告: capacity=0 被强制为 1" << std::endl;
+            DH_LOG_WARN("ring_buffer") << "警告: capacity=0 被强制为 1";
         }
     }
 

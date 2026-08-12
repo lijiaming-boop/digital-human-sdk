@@ -15,9 +15,12 @@ namespace digital_human {
 
 class DigitalHumanSDK;
 
+namespace audio { class IStreamingVAD; }
+namespace dialog { class IASRClient; }
+
 namespace dialog {
 
-class IDigitalHumanSink {
+class DH_API IDigitalHumanSink {
 public:
     virtual ~IDigitalHumanSink() = default;
     virtual bool PushAudio(const std::vector<float>& samples,
@@ -26,6 +29,7 @@ public:
     virtual bool PushVideo(const cv::Mat& frame,
                            int64_t pts_ms,
                            std::string& error) = 0;
+    /// 必须快速、非阻塞地提交结束信号；耗时回收应由实现自行异步完成。
     virtual void Finish() = 0;
 };
 
@@ -68,6 +72,17 @@ struct ConversationConfig {
     AvatarUpdatePolicy avatar_update_policy = AvatarUpdatePolicy::Fit;
     int avatar_canvas_width = 0;   // 0: 以初始头像尺寸为画布
     int avatar_canvas_height = 0;
+
+    /// History 预算（P1-3.10a）：限制多轮对话历史长度，
+    /// 防止 LLM 上下文溢出和无界内存增长。
+    int max_history_turns = 20;           ///< 保留最近 N 轮（1 轮 = 1 user + 1 assistant）
+    int max_history_chars = 8192;         ///< 历史总字符上限
+    int max_history_tokens_estimate = 0;  ///< token 估算上限（0=不限制）
+
+    /// Barge-in 配置（P1-3.10c）：VAD 检测到用户语音时自动打断当前回复。
+    bool enable_barge_in = false;          ///< 是否启用音频打断
+    int  barge_in_min_voice_ms = 90;       ///< 最短语音持续时间触发打断
+    int  barge_in_cleanup_timeout_ms = 500;///< 清理超时
 };
 
 struct ConversationCallbacks {
@@ -106,7 +121,7 @@ enum class StopResult {
 
 /// First-stage conversation orchestrator:
 /// user text -> text generation service -> sentence segmentation -> TTS -> SDK input.
-class ConversationSession {
+class DH_API ConversationSession {
 public:
     ConversationSession(ITextGenerationClient& text_client,
                         tts::ITTSClient& tts_client,
@@ -137,6 +152,20 @@ public:
                     std::chrono::milliseconds timeout = std::chrono::seconds(30));
     bool IsBusy() const;
     SessionState State() const;
+
+    /// 注入 ASR 客户端（可选，用于语音输入）。
+    /// 传入 nullptr 解除绑定。客户端生命周期由调用者管理，须在 Stop 前保持有效。
+    void SetASRClient(IASRClient* client);
+
+    /// 注入流式 VAD（可选，用于 barge-in 检测）。
+    /// 传入 nullptr 解除绑定。VAD 生命周期由调用者管理，须在 Stop 前保持有效。
+    void SetStreamingVAD(audio::IStreamingVAD* vad);
+
+    /// 推送用户音频（供 ASR + VAD 消费）。
+    /// samples: 16kHz mono float32，sample_count 为样本数。
+    /// 未注入 ASR/VAD 时仍可调用（音频被丢弃），便于统一管线。
+    bool PushUserAudio(const float* samples, size_t sample_count,
+                       std::string& error);
 
 private:
     struct Impl;
