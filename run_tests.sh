@@ -119,3 +119,11 @@ if [ ${#FAILED_TESTS[@]} -gt 0 ]; then
     echo "  失败测试: ${FAILED_TESTS[*]}"
 fi
 echo "=========================================="
+
+# CI 门禁契约：任何失败或超时都必须以非零状态退出，否则流水线会误判成功。
+if [ "$FAIL_COUNT" -gt 0 ]; then
+    echo "[FATAL] $FAIL_COUNT 个测试失败，脚本以非零状态退出。" >&2
+    exit 1
+fi
+
+exit 0
