@@ -5,10 +5,11 @@
 #include <exception>
 #include<filesystem>
 #include <opencv2/opencv.hpp>
+#include "digital_human/export.h"
 
 namespace digital_human{
     namespace core{
-        class FaceDetector{
+        class DH_API FaceDetector{
         public:
             FaceDetector();
             ~FaceDetector();

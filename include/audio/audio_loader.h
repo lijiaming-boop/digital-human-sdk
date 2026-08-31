@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <string>
 #include <cstdint>
+#include "digital_human/export.h"
 
 namespace digital_human {
 namespace audio {
@@ -17,7 +18,7 @@ struct AudioData {
     double duration = 0.0;
 };
 
-class AudioLoader {
+class DH_API AudioLoader {
 public:
     AudioLoader();
     ~AudioLoader();
@@ -33,7 +34,7 @@ private:
     std::unique_ptr<Impl> impl_;
 };
 
-class AudioLoaderException : public std::runtime_error {
+class DH_API AudioLoaderException : public std::runtime_error {
 public:
     explicit AudioLoaderException(const std::string& message)
         : std::runtime_error(message) {}

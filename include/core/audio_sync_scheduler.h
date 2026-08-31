@@ -7,6 +7,7 @@
 
 #include "core/frame_scheduler.h"
 #include "core/av_sync.h"
+#include "digital_human/export.h"
 
 namespace digital_human {
 namespace audio {
@@ -58,7 +59,7 @@ enum class PlaybackState {
  *
  * 组合了 AudioPlayer、AVSync 和 FrameScheduler 的功能。
  */
-class AudioSyncScheduler {
+class DH_API AudioSyncScheduler {
 public:
     AudioSyncScheduler();
     /// Inject a playback backend. This keeps the scheduler usable when the

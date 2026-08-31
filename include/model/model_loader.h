@@ -5,13 +5,14 @@
 #include <functional>
 
 #include <net.h>
+#include "digital_human/export.h"
 
 namespace digital_human {
 namespace model {
 
 using LoadCallback = std::function<void(ncnn::Net* net, float io_cost_ms, float warmup_cost_ms)>;
 
-class ModelLoader {
+class DH_API ModelLoader {
 public:
     ModelLoader();
     ~ModelLoader();

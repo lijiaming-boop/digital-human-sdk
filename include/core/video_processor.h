@@ -6,6 +6,7 @@
 #include "core/thread_base.h"
 #include "core/thread_safe_queue.h"
 #include "core/packet.h"
+#include "digital_human/export.h"
 
 namespace digital_human {
 namespace core {
@@ -37,7 +38,7 @@ struct VideoProcessorConfig {
  *
  * 线程安全：内部状态通过队列隔离，所有处理模块为独立实例。
  */
-class VideoProcessor : public ThreadBase {
+class DH_API VideoProcessor : public ThreadBase {
 public:
     explicit VideoProcessor(const std::string& name = "VideoProcessor");
     ~VideoProcessor() override;

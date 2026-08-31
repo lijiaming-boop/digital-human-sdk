@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "core/thread_base.h"
+#include "digital_human/export.h"
 
 namespace digital_human {
 namespace core {
@@ -28,7 +29,7 @@ struct WorkerShutdownReport {
  * Workers are registered in startup order. Stop and Wait use reverse order so
  * upstream producers are stopped before downstream consumers are reclaimed.
  */
-class WorkerRegistry {
+class DH_API WorkerRegistry {
 public:
     void Clear();
     void Add(const std::string& name, ThreadBase* worker);

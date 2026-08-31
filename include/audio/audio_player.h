@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include "digital_human/export.h"
 
 namespace digital_human {
 namespace audio {
@@ -19,7 +20,7 @@ enum class AudioPlayerState {
 
 /// Audio output abstraction used by the runtime. Implementations may use
 /// PortAudio, a platform-native backend, or a deterministic test clock.
-class IAudioPlayer {
+class DH_API IAudioPlayer {
 public:
     virtual ~IAudioPlayer() = default;
 
@@ -60,7 +61,7 @@ public:
  *
  * 线程安全：PortAudio 回调在独立音频线程运行，通过原子变量保护共享状态。
  */
-class AudioPlayer final : public IAudioPlayer {
+class DH_API AudioPlayer final : public IAudioPlayer {
 public:
     AudioPlayer();
     ~AudioPlayer() override;

@@ -2,11 +2,12 @@
 
 #include <vector>
 #include <memory>
+#include "digital_human/export.h"
 
 namespace digital_human {
 namespace audio {
 
-class RMSNormalize {
+class DH_API RMSNormalize {
 public:
     explicit RMSNormalize(float targetRMS = 0.056f);
     ~RMSNormalize();

@@ -3,6 +3,7 @@
 #include <memory>
 #include <cstdint>
 #include <string>
+#include "digital_human/export.h"
 
 namespace digital_human {
 namespace core {
@@ -50,7 +51,7 @@ struct SyncResult {
  *
  * 采用 PIMPL（Pointer to Implementation）模式。
  */
-class AVSync {
+class DH_API AVSync {
 public:
     AVSync();
     ~AVSync();

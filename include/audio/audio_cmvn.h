@@ -2,11 +2,12 @@
 
 #include <opencv2/opencv.hpp>
 #include <memory>
+#include "digital_human/export.h"
 
 namespace digital_human {
 namespace audio {
 
-class CMVN {
+class DH_API CMVN {
 public:
     CMVN();
     ~CMVN();

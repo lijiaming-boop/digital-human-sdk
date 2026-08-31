@@ -3,11 +3,12 @@
 #include <vector>
 #include <memory>
 #include <opencv2/core.hpp>
+#include "digital_human/export.h"
 
 namespace digital_human {
 namespace core {
 
-class FaceMaskGenerator {
+class DH_API FaceMaskGenerator {
 public:
     FaceMaskGenerator();
     ~FaceMaskGenerator();

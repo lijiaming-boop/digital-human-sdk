@@ -2,11 +2,12 @@
 
 #include <cstddef>
 #include <memory>
+#include "digital_human/export.h"
 
 namespace digital_human {
 namespace audio {
 
-class RingBuffer {
+class DH_API RingBuffer {
 public:
     explicit RingBuffer(size_t capacity);
     ~RingBuffer();

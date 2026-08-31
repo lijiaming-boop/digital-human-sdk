@@ -2,11 +2,12 @@
 
 #include <vector>
 #include <memory>
+#include "digital_human/export.h"
 
 namespace digital_human {
 namespace audio {
 
-class PreEmphasis {
+class DH_API PreEmphasis {
 public:
     explicit PreEmphasis(float alpha = 0.97f);
     ~PreEmphasis();

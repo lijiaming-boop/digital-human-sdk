@@ -2,11 +2,12 @@
 
 #include <vector>
 #include <memory>
+#include "digital_human/export.h"
 
 namespace digital_human {
 namespace audio {
 
-class NoiseReduction {
+class DH_API NoiseReduction {
 public:
     NoiseReduction(int noiseFrames = 10, float oversubtraction = 0.02f);
     ~NoiseReduction();

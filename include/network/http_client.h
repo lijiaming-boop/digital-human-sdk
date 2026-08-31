@@ -4,6 +4,7 @@
 #include <functional>
 #include <string>
 #include <vector>
+#include "digital_human/export.h"
 
 namespace digital_human {
 namespace network {
@@ -40,7 +41,7 @@ using CancelCheck = std::function<bool()>;
 
 /// Thin synchronous HTTP transport. The implementation uses libcurl when the
 /// optional HTTP dependency is available; no curl types leak into the ABI.
-class HttpClient {
+class DH_API HttpClient {
 public:
     static bool IsAvailable();
 

@@ -3,6 +3,7 @@
 #include <memory>
 #include <mat.h>
 #include <opencv2/core.hpp>
+#include "digital_human/export.h"
 
 namespace digital_human {
 namespace model {
@@ -19,7 +20,7 @@ namespace model {
  *
  * 采用 PIMPL（Pointer to Implementation）模式。
  */
-class OutputProcessor {
+class DH_API OutputProcessor {
 public:
     OutputProcessor();
     ~OutputProcessor();

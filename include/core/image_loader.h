@@ -5,11 +5,12 @@
 #include <memory>
 #include <exception>
 #include <opencv2/opencv.hpp>
+#include "digital_human/export.h"
 
 namespace digital_human {
 namespace core {
 
-class ImageLoader {
+class DH_API ImageLoader {
 public:
     ImageLoader();
     ~ImageLoader();
@@ -27,7 +28,7 @@ private:
     std::unique_ptr<ImageLoaderImpl> impl_;
 };
 
-class ImageLoaderException : public std::runtime_error {
+class DH_API ImageLoaderException : public std::runtime_error {
 public:
     explicit ImageLoaderException(const std::string& message) 
         : std::runtime_error(message) {}

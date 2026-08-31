@@ -3,6 +3,7 @@
 #include <memory>
 #include <string>
 #include <mat.h>
+#include "digital_human/export.h"
 
 namespace digital_human {
 namespace model {
@@ -36,7 +37,7 @@ struct VulkanStatus {
  *
  * 采用 PIMPL（Pointer to Implementation）模式，隐藏内部实现细节。
  */
-class ModelInferencer {
+class DH_API ModelInferencer {
 public:
     /// @brief 构造一个未初始化的推理器
     ModelInferencer();
