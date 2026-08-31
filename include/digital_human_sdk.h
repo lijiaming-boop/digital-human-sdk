@@ -8,6 +8,8 @@
 
 #include <opencv2/core.hpp>
 
+#include "digital_human/export.h"
+
 namespace digital_human {
 
 // ============================================================================
@@ -220,7 +222,7 @@ using FrameCallback = std::function<void(const cv::Mat& frame, int64_t pts_ms)>;
  * 线程安全：公有接口线程安全，内部状态通过原子变量与队列隔离。
  * 一次性对象语义：Stop() 后不可重启，需销毁重建。
  */
-class DigitalHumanSDK {
+class DH_API DigitalHumanSDK {
 public:
     DigitalHumanSDK();
     ~DigitalHumanSDK();
@@ -249,7 +251,8 @@ public:
     /// @brief 停止流水线并释放线程资源
     ///
     /// 幂等。停止后 SDK 不可重启（一次性对象语义）。
-    SDKError Stop();
+    /// timeout_ms >= 0 时覆盖 SDKConfig::shutdown_timeout_ms；-1 使用配置值。
+    SDKError Stop(int timeout_ms = -1);
 
     /// @brief 暂停（停止消费输入，已入队数据保留）
     SDKError Pause();

@@ -11,6 +11,7 @@
 #include "core/face_detector.h"
 #include "core/face_aligner.h"
 #include "core/face_mask_generator.h"
+#include "digital_human/log_macros.h"
 
 namespace digital_human {
 namespace core {
@@ -209,15 +210,15 @@ struct VideoProcessor::Impl {
     }
 
     void LogError(const std::string& msg) {
-        std::cerr << "[VideoProcessor] ERROR: " << msg << std::endl;
+        DH_LOG_ERROR("video_processor") << msg;
     }
 
     void LogWarn(const std::string& msg) {
-        std::cout << "[VideoProcessor] WARN: " << msg << std::endl;
+        DH_LOG_WARN("video_processor") << msg;
     }
 
     void LogInfo(const std::string& msg) {
-        std::cout << "[VideoProcessor] " << msg << std::endl;
+        DH_LOG_INFO("video_processor") << msg;
     }
 };
 

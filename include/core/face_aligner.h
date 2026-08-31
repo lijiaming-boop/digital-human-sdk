@@ -2,13 +2,14 @@
 #include <vector>
 #include <memory>
 #include <opencv2/opencv.hpp>
+#include "digital_human/export.h"
 
 namespace digital_human {
 namespace core {
 
 struct FaceAlignerResult;
 
-class FaceAligner {
+class DH_API FaceAligner {
 public:
     FaceAligner();
     ~FaceAligner();

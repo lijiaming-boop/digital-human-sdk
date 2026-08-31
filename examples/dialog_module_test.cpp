@@ -12,6 +12,8 @@
 
 #include "dialog/conversation_session.h"
 #include "dialog/sentence_segmenter.h"
+#include "audio/streaming_vad.h"
+#include "digital_human/metrics.h"
 
 using namespace digital_human;
 
@@ -51,6 +53,35 @@ public:
         }
         return true;
     }
+};
+
+class FailingTextClient final : public dialog::ITextGenerationClient {
+public:
+    bool Generate(const dialog::GenerateRequest&,
+                  const dialog::TextDeltaCallback& on_delta,
+                  const dialog::CancelCheck&,
+                  std::string& error) override {
+        on_delta("不完整响应");
+        error = "injected generation failure";
+        return false;
+    }
+};
+
+class UncooperativeTextClient final : public dialog::ITextGenerationClient {
+public:
+    bool Generate(const dialog::GenerateRequest&,
+                  const dialog::TextDeltaCallback&,
+                  const dialog::CancelCheck&,
+                  std::string&) override {
+        entered.store(true);
+        while (!release.load()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        return false;
+    }
+
+    std::atomic<bool> entered{false};
+    std::atomic<bool> release{false};
 };
 
 class FakeTTSClient final : public tts::ITTSClient {
@@ -133,6 +164,31 @@ int main() {
                 "UTF-8 增量文本按强标点正确分句");
     ok &= Check(segmenter.Flush() == "下一句", "Flush 返回尾部文本");
 
+    audio::StreamingVADConfig invalid_vad_config;
+    invalid_vad_config.frame_ms = 0;
+    ok &= Check(!audio::create_streaming_vad(invalid_vad_config),
+                "流式 VAD 拒绝零帧长配置");
+    auto vad = audio::create_streaming_vad(audio::StreamingVADConfig{});
+    ok &= Check(static_cast<bool>(vad), "流式 VAD 接受默认配置");
+    ok &= Check(vad && vad->Start([](audio::VADEvent) {}),
+                "流式 VAD 使用有效回调启动");
+    ok &= Check(vad && !vad->PushAudio(nullptr, 1),
+                "流式 VAD 拒绝空样本指针");
+    if (vad) vad->Stop();
+
+    PercentileTracker tracker(64);
+    std::thread metric_writer_a([&]() {
+        for (int i = 0; i < 1000; ++i) tracker.record(i);
+    });
+    std::thread metric_writer_b([&]() {
+        for (int i = 0; i < 1000; ++i) tracker.record(i + 1000);
+    });
+    for (int i = 0; i < 100; ++i) (void)tracker.p95();
+    metric_writer_a.join();
+    metric_writer_b.join();
+    ok &= Check(tracker.count() == 2000,
+                "指标统计支持并发写入与快照读取");
+
     FakeTextClient text_client;
     FakeTTSClient tts_client;
     RecordingSink sink;
@@ -190,6 +246,61 @@ int main() {
     ok &= Check(interrupted_session.WaitUntilIdle(std::chrono::seconds(2)),
                 "打断会取消文本/TTS待处理任务并回到空闲");
     interrupted_session.Stop(false);
+
+    FailingTextClient failing_text;
+    FakeTTSClient failure_tts;
+    RecordingSink failure_sink;
+    dialog::ConversationSession failure_session(
+        failing_text, failure_tts, failure_sink);
+    std::atomic<int> failure_errors{0};
+    std::atomic<int> failure_completions{0};
+    dialog::ConversationCallbacks failure_callbacks;
+    failure_callbacks.on_error = [&](uint64_t, const std::string&) {
+        failure_errors.fetch_add(1);
+    };
+    failure_callbacks.on_turn_complete = [&](uint64_t) {
+        failure_completions.fetch_add(1);
+    };
+    ok &= Check(failure_session.Start(config, avatar, failure_callbacks),
+                "失败终态测试会话启动");
+    ok &= Check(failure_session.SubmitUserText("触发失败") != 0,
+                "提交失败注入任务");
+    ok &= Check(failure_session.WaitUntilIdle(std::chrono::seconds(2)),
+                "生成失败后会话退出忙状态");
+    ok &= Check(failure_session.State() == dialog::SessionState::FAILED,
+                "生成失败保持 FAILED 终态");
+    ok &= Check(failure_errors.load() == 1,
+                "生成失败只触发一次 on_error");
+    ok &= Check(failure_completions.load() == 1,
+                "失败 turn 也触发一次 on_turn_complete（不卡死回调编排器）");
+    ok &= Check(failure_tts.calls.load() == 0,
+                "失败的部分 LLM 响应不会进入 TTS");
+    failure_session.Stop(false);
+
+    UncooperativeTextClient uncooperative_text;
+    FakeTTSClient timeout_tts;
+    RecordingSink timeout_sink;
+    dialog::ConversationSession timeout_session(
+        uncooperative_text, timeout_tts, timeout_sink);
+    ok &= Check(timeout_session.Start(config, avatar), "停止超时测试会话启动");
+    ok &= Check(timeout_session.SubmitUserText("阻塞生成") != 0,
+                "提交不响应取消的生成任务");
+    for (int i = 0; i < 100 && !uncooperative_text.entered.load(); ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    const auto stop_started = std::chrono::steady_clock::now();
+    const auto timeout_result = timeout_session.Stop(
+        false, std::chrono::milliseconds(20));
+    const auto stop_elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - stop_started);
+    ok &= Check(timeout_result == dialog::StopResult::Timeout,
+                "不合作的生成客户端触发 Stop 超时");
+    ok &= Check(stop_elapsed < std::chrono::milliseconds(250),
+                "Stop 在 deadline 后有界返回");
+    uncooperative_text.release.store(true);
+    ok &= Check(timeout_session.Stop(false, std::chrono::seconds(2))
+                    == dialog::StopResult::Stopped,
+                "客户端退出后可重试 Stop 并回收线程");
 
     std::cout << (ok ? "\nALL DIALOG MODULE TESTS PASSED\n"
                      : "\nDIALOG MODULE TEST FAILED\n");

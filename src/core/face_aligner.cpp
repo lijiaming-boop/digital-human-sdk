@@ -3,6 +3,8 @@
 #include <iostream>
 #include <cmath>
 
+#include "digital_human/log_macros.h"
+
 namespace digital_human {
 namespace core {
 
@@ -31,7 +33,7 @@ struct FaceAligner::Impl {
     cv::Mat alignByEyes(const cv::Mat& image, const std::vector<cv::Point2f>& landmarks,
                         int face_size = 96) {
         if (image.empty() || landmarks.size() != 68) {
-            std::cerr << "alignByEyes: image or landmarks is empty" << std::endl;
+            DH_LOG_ERROR("face_aligner") << "alignByEyes: image or landmarks is empty";
             return cv::Mat();
         }
 
@@ -56,7 +58,7 @@ struct FaceAligner::Impl {
                  pow(right_eye_center.y - left_eye_center.y, 2));
         // 防除零：两眼重合时无法计算仿射变换
         if (current_dist < 1e-6) {
-            std::cerr << "alignByEyes: 两眼重合，无法对齐" << std::endl;
+            DH_LOG_ERROR("face_aligner") << "alignByEyes: 两眼重合，无法对齐";
             cv::Mat empty;
             return empty;
         }
@@ -84,13 +86,12 @@ struct FaceAligner::Impl {
                                   double ratio) {
         FaceAlignerResult result;
         if (image.empty() || face_rect.width == 0 || face_rect.height == 0) {
-            std::cerr << "alignByRect: image or face_rect is empty" << std::endl;
+            DH_LOG_ERROR("face_aligner") << "alignByRect: image or face_rect is empty";
             result.valid = false;
             return result;
         }
         if (landmarks.size() != 68) {
-            std::cerr << "alignByRect: need 68 landmarks, got " << landmarks.size()
-                      << std::endl;
+            DH_LOG_ERROR("face_aligner") << "alignByRect: need 68 landmarks, got " << landmarks.size();
             result.valid = false;
             return result;
         }
@@ -130,7 +131,7 @@ struct FaceAligner::Impl {
                  pow(right_eye_center.y - left_eye_center.y, 2));
         // 防除零：两眼重合时无法计算仿射变换
         if (current_dist < 1e-6) {
-            std::cerr << "alignByRect: 两眼重合，无法对齐" << std::endl;
+            DH_LOG_ERROR("face_aligner") << "alignByRect: 两眼重合，无法对齐";
             result.valid = false;
             return result;
         }

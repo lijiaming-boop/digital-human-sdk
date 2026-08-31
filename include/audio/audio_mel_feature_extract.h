@@ -3,6 +3,7 @@
 #include <vector>
 #include <memory>
 #include <opencv2/opencv.hpp>
+#include "digital_human/export.h"
 
 namespace digital_human {
 namespace audio {
@@ -25,7 +26,7 @@ struct MelConfig {
     float maxAbsNorm  = 4.0f;    ///< symmetric 归一化上界（Wav2Lip: 4.0）
 };
 
-class MelFeatureExtract {
+class DH_API MelFeatureExtract {
 public:
     MelFeatureExtract();
     ~MelFeatureExtract();

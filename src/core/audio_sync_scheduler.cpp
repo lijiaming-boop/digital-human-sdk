@@ -6,12 +6,14 @@
 #include <sstream>
 #include <string>
 
+#include "digital_human/log_macros.h"
+
 #include "audio/audio_player.h"
 
 namespace digital_human {
 namespace core {
 
-using audio::AudioPlayer;
+using audio::IAudioPlayer;
 using audio::AudioPlayerState;
 
 // ============================================================================
@@ -20,7 +22,10 @@ using audio::AudioPlayerState;
 
 struct AudioSyncScheduler::Impl {
     // ---- 组合模块 ----
-    AudioPlayer      audio_player;           ///< 音频播放器
+    explicit Impl(std::unique_ptr<IAudioPlayer> player)
+        : audio_player(std::move(player)) {}
+
+    std::unique_ptr<IAudioPlayer> audio_player; ///< 可注入音频播放器
     AVSync           av_sync;                ///< 音视频同步判定
     FrameScheduler   frame_scheduler;        ///< 帧调度器
 
@@ -53,7 +58,7 @@ struct AudioSyncScheduler::Impl {
     void updateAudioClock() {
         if (!initialized || !audio_loaded) return;
 
-        int64_t consumedFrames = audio_player.GetConsumedFrames();
+        int64_t consumedFrames = audio_player->GetConsumedFrames();
 
         // 计算增量：如果出现回退（重置/重新播放），直接用当前值
         int64_t deltaFrames;
@@ -97,7 +102,15 @@ struct AudioSyncScheduler::Impl {
 // ============================================================================
 
 AudioSyncScheduler::AudioSyncScheduler()
-    : impl_(std::make_unique<Impl>()) {}
+#ifdef DIGITAL_HUMAN_HAS_AUDIO_IO
+    : impl_(std::make_unique<Impl>(std::make_unique<audio::AudioPlayer>())) {}
+#else
+    : impl_(std::make_unique<Impl>(nullptr)) {}
+#endif
+
+AudioSyncScheduler::AudioSyncScheduler(
+    std::unique_ptr<audio::IAudioPlayer> player)
+    : impl_(std::make_unique<Impl>(std::move(player))) {}
 
 AudioSyncScheduler::~AudioSyncScheduler() {
     Destroy();
@@ -123,36 +136,43 @@ AudioSyncScheduler& AudioSyncScheduler::operator=(AudioSyncScheduler&& other) no
 
 bool AudioSyncScheduler::Init(const AudioSyncConfig& config) {
     if (impl_->initialized) {
-        std::cerr << "[AudioSyncScheduler] Init: 已初始化，请先调用 Destroy()" << std::endl;
+        DH_LOG_ERROR("audio_sync") << "Init: 已初始化，请先调用 Destroy()";
         return false;
     }
 
     // 校验参数
     if (config.audio_sample_rate <= 0) {
-        std::cerr << "[AudioSyncScheduler] Init: 无效的 audio_sample_rate ("
-                  << config.audio_sample_rate << ")" << std::endl;
+        DH_LOG_ERROR("audio_sync") << "Init: 无效的 audio_sample_rate ("
+                  << config.audio_sample_rate << ")";
         return false;
     }
     if (config.audio_channels <= 0 || config.audio_channels > 2) {
-        std::cerr << "[AudioSyncScheduler] Init: 无效的 audio_channels ("
-                  << config.audio_channels << ")" << std::endl;
+        DH_LOG_ERROR("audio_sync") << "Init: 无效的 audio_channels ("
+                  << config.audio_channels << ")";
         return false;
     }
     if (config.target_fps <= 0.0) {
-        std::cerr << "[AudioSyncScheduler] Init: 无效的 target_fps ("
-                  << config.target_fps << ")" << std::endl;
+        DH_LOG_ERROR("audio_sync") << "Init: 无效的 target_fps ("
+                  << config.target_fps << ")";
         return false;
     }
 
     impl_->config = config;
 
+    if (!impl_->audio_player) {
+        DH_LOG_ERROR("audio_sync")
+            << "Init: no audio output backend; inject IAudioPlayer or build "
+               "with DIGITAL_HUMAN_ENABLE_AUDIO_IO=ON";
+        return false;
+    }
+
     // 初始化 AudioPlayer
-    if (!impl_->audio_player.Init(
+    if (!impl_->audio_player->Init(
             config.audio_sample_rate,
             config.audio_channels,
             config.audio_frames_per_buffer)) {
-        std::cerr << "[AudioSyncScheduler] Init: AudioPlayer 初始化失败: "
-                  << impl_->audio_player.GetLastErrorMsg() << std::endl;
+        DH_LOG_ERROR("audio_sync") << "Init: AudioPlayer 初始化失败: "
+                  << impl_->audio_player->GetLastErrorMsg();
         return false;
     }
 
@@ -165,11 +185,10 @@ bool AudioSyncScheduler::Init(const AudioSyncConfig& config) {
     impl_->initialized = true;
     impl_->play_state  = PlaybackState::STOPPED;
 
-    std::cout << "[AudioSyncScheduler] 初始化成功: "
+    DH_LOG_INFO("audio_sync") << "初始化成功: "
               << config.audio_sample_rate << "Hz "
               << config.audio_channels << "ch "
-              << config.target_fps << "fps"
-              << std::endl;
+              << config.target_fps << "fps";
 
     return true;
 }
@@ -183,11 +202,11 @@ void AudioSyncScheduler::Destroy() {
 
     // 停止播放
     if (impl_->play_state != PlaybackState::STOPPED) {
-        impl_->audio_player.Stop();
+        impl_->audio_player->Stop();
     }
 
     // 销毁 AudioPlayer
-    impl_->audio_player.Destroy();
+    impl_->audio_player->Destroy();
 
     // 重置 AVSync 和 FrameScheduler
     impl_->av_sync.Reset();
@@ -207,17 +226,17 @@ void AudioSyncScheduler::Destroy() {
 
 bool AudioSyncScheduler::LoadAudio(const float* samples, int numSamples, int channels) {
     if (!impl_->initialized) {
-        std::cerr << "[AudioSyncScheduler] LoadAudio: 未初始化" << std::endl;
+        DH_LOG_ERROR("audio_sync") << "LoadAudio: 未初始化";
         return false;
     }
     if (!samples || numSamples <= 0) {
-        std::cerr << "[AudioSyncScheduler] LoadAudio: 无效参数" << std::endl;
+        DH_LOG_ERROR("audio_sync") << "LoadAudio: 无效参数";
         return false;
     }
 
-    if (!impl_->audio_player.LoadAudio(samples, numSamples, channels)) {
-        std::cerr << "[AudioSyncScheduler] LoadAudio: AudioPlayer 加载失败: "
-                  << impl_->audio_player.GetLastErrorMsg() << std::endl;
+    if (!impl_->audio_player->LoadAudio(samples, numSamples, channels)) {
+        DH_LOG_ERROR("audio_sync") << "LoadAudio: AudioPlayer 加载失败: "
+                  << impl_->audio_player->GetLastErrorMsg();
         return false;
     }
 
@@ -231,17 +250,16 @@ bool AudioSyncScheduler::LoadAudio(const float* samples, int numSamples, int cha
 
     // 同步帧调度器的帧率到音频时长
     // 总视频帧数 = 音频时长 / 帧间隔
-    double audioDurationMs = impl_->audio_player.GetTotalDurationMs();
+    double audioDurationMs = impl_->audio_player->GetTotalDurationMs();
     double frameIntervalMs = 1000.0 / impl_->config.target_fps;
     int64_t totalVideoFrames = static_cast<int64_t>(audioDurationMs / frameIntervalMs);
 
-    std::cout << "[AudioSyncScheduler] 音频已加载: "
+    DH_LOG_INFO("audio_sync") << "音频已加载: "
               << numSamples << " samples, "
               << channels << "ch, "
               << audioDurationMs << "ms (约 "
               << totalVideoFrames << " 视频帧 @ "
-              << impl_->config.target_fps << "fps)"
-              << std::endl;
+              << impl_->config.target_fps << "fps)";
 
     return true;
 }
@@ -256,11 +274,11 @@ bool AudioSyncScheduler::LoadAudio(const std::vector<float>& samples, int channe
 
 bool AudioSyncScheduler::Play() {
     if (!impl_->initialized) {
-        std::cerr << "[AudioSyncScheduler] Play: 未初始化" << std::endl;
+        DH_LOG_ERROR("audio_sync") << "Play: 未初始化";
         return false;
     }
     if (!impl_->audio_loaded) {
-        std::cerr << "[AudioSyncScheduler] Play: 未加载音频数据" << std::endl;
+        DH_LOG_ERROR("audio_sync") << "Play: 未加载音频数据";
         return false;
     }
 
@@ -277,75 +295,72 @@ bool AudioSyncScheduler::Play() {
     }
 
     // 启动 AudioPlayer
-    if (!impl_->audio_player.Play()) {
-        std::cerr << "[AudioSyncScheduler] Play: AudioPlayer 播放失败"
-                  << std::endl;
+    if (!impl_->audio_player->Play()) {
+        DH_LOG_ERROR("audio_sync") << "Play: AudioPlayer 播放失败";
         return false;
     }
 
     impl_->play_state = PlaybackState::PLAYING;
-    std::cout << "[AudioSyncScheduler] 开始播放" << std::endl;
+    DH_LOG_INFO("audio_sync") << "开始播放";
     return true;
 }
 
 bool AudioSyncScheduler::Pause() {
     if (!impl_->initialized) {
-        std::cerr << "[AudioSyncScheduler] Pause: 未初始化" << std::endl;
+        DH_LOG_ERROR("audio_sync") << "Pause: 未初始化";
         return false;
     }
     if (impl_->play_state != PlaybackState::PLAYING) {
-        std::cerr << "[AudioSyncScheduler] Pause: 当前不在播放状态" << std::endl;
+        DH_LOG_WARN("audio_sync") << "Pause: 当前不在播放状态";
         return false;
     }
 
-    if (!impl_->audio_player.Pause()) {
-        std::cerr << "[AudioSyncScheduler] Pause: AudioPlayer 暂停失败"
-                  << std::endl;
+    if (!impl_->audio_player->Pause()) {
+        DH_LOG_ERROR("audio_sync") << "Pause: AudioPlayer 暂停失败";
         return false;
     }
 
     impl_->play_state = PlaybackState::PAUSED;
-    std::cout << "[AudioSyncScheduler] 已暂停" << std::endl;
+    DH_LOG_INFO("audio_sync") << "已暂停";
     return true;
 }
 
 bool AudioSyncScheduler::Resume() {
     if (!impl_->initialized) {
-        std::cerr << "[AudioSyncScheduler] Resume: 未初始化" << std::endl;
+        DH_LOG_ERROR("audio_sync") << "Resume: 未初始化";
         return false;
     }
     if (impl_->play_state != PlaybackState::PAUSED) {
-        std::cerr << "[AudioSyncScheduler] Resume: 当前不在暂停状态" << std::endl;
+        DH_LOG_WARN("audio_sync") << "Resume: 当前不在暂停状态";
         return false;
     }
 
-    if (!impl_->audio_player.Resume()) {
-        std::cerr << "[AudioSyncScheduler] Resume: AudioPlayer 恢复失败"
-                  << std::endl;
+    if (!impl_->audio_player->Resume()) {
+        DH_LOG_ERROR("audio_sync") << "Resume: AudioPlayer 恢复失败";
         return false;
     }
 
     impl_->play_state = PlaybackState::PLAYING;
-    std::cout << "[AudioSyncScheduler] 恢复播放" << std::endl;
+    DH_LOG_INFO("audio_sync") << "恢复播放";
     return true;
 }
 
 bool AudioSyncScheduler::Stop() {
     if (!impl_->initialized) {
-        std::cerr << "[AudioSyncScheduler] Stop: 未初始化" << std::endl;
+        DH_LOG_ERROR("audio_sync") << "Stop: 未初始化";
         return false;
     }
     if (impl_->play_state == PlaybackState::STOPPED) {
         return true;
     }
 
-    impl_->audio_player.Stop();
+    impl_->audio_player->Stop();
     impl_->av_sync.Reset();
     impl_->frame_scheduler.Reset();
     impl_->play_state = PlaybackState::STOPPED;
     impl_->has_sync_result = false;
 
-    std::cout << "[AudioSyncScheduler] 已停止" << std::endl;
+    DH_LOG_INFO("audio_sync") << "已停止";
     return true;
 }
 
@@ -454,7 +469,7 @@ std::string AudioSyncScheduler::GetStatsString() const {
     // 音频信息
     oss << "  音频时钟: " << GetAudioClockMs() << " ms";
     if (impl_->audio_loaded) {
-        oss << " / " << impl_->audio_player.GetTotalDurationMs() << " ms";
+        oss << " / " << impl_->audio_player->GetTotalDurationMs() << " ms";
     }
     oss << std::endl;
 

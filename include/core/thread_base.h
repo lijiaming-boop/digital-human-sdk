@@ -9,6 +9,7 @@
 #include <string>
 #include <thread>
 #include <utility>
+#include "digital_human/export.h"
 
 // WinBase.h defines ERROR as a macro. Keep the enum value usable on Windows.
 #ifdef ERROR
@@ -48,7 +49,7 @@ inline const char* ThreadStateToString(ThreadState s) {
  *
  * 继承该类并实现 Run() 方法，即可获得完整的线程控制能力。
  */
-class ThreadBase {
+class DH_API ThreadBase {
 public:
     /// @brief 构造函数
     /// @param name 线程名称（用于日志和调试）

@@ -9,6 +9,7 @@
 #include "core/pipeline.h"
 #include "core/thread_base.h"
 #include "core/worker_registry.h"
+#include "digital_human/c_api.h"
 #include "digital_human_sdk.h"
 
 namespace {
@@ -286,6 +287,40 @@ bool TestSdkValidation() {
     return ok;
 }
 
+bool TestCApiContracts() {
+    bool ok = true;
+    dh_sdk_config_t config{};
+    config.struct_size = sizeof(config);
+    config.audio_sample_rate = 16000;
+    config.audio_channels = 1;
+    config.fps = 25;
+    config.inference_threads = 1;
+    dh_error_t error{};
+    error.struct_size = sizeof(error);
+    dh_sdk_t* sdk = dh_sdk_create(&config, &error);
+    ok = Expect(sdk != nullptr, "C API creates an SDK with default model paths") && ok;
+    if (sdk) {
+        dh_metrics_t too_small{};
+        too_small.struct_size = sizeof(uint32_t);
+        ok = Expect(dh_sdk_get_metrics(sdk, &too_small) == 0,
+                    "C API rejects undersized metrics structs") && ok;
+        ok = Expect(dh_sdk_stop(sdk, 100, &error) == 1,
+                    "C API honors an explicit stop timeout") && ok;
+        dh_sdk_destroy(sdk);
+    }
+
+    config.model_path = "/path/that/does/not/exist";
+    error = {};
+    error.struct_size = sizeof(error);
+    sdk = dh_sdk_create(&config, &error);
+    ok = Expect(sdk == nullptr, "C API reports model initialization failure") && ok;
+    const std::string saved_message = error.message ? error.message : "";
+    ok = Expect(!saved_message.empty(),
+                "C API error text remains readable after create returns") && ok;
+    if (sdk) dh_sdk_destroy(sdk);
+    return ok;
+}
+
 }  // namespace
 
 int main() {
@@ -296,6 +331,7 @@ int main() {
     ok = TestWorkerRegistryStartRollback() && ok;
     ok = TestPipelineLifecycleAndValidation() && ok;
     ok = TestSdkValidation() && ok;
+    ok = TestCApiContracts() && ok;
 
     if (!ok) {
         std::cerr << "Lifecycle safety regression test failed." << std::endl;

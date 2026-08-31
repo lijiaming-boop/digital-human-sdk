@@ -6,6 +6,8 @@
 #include <sstream>
 #include <limits>
 
+#include "digital_human/log_macros.h"
+
 namespace digital_human {
 namespace core {
 
@@ -41,7 +43,8 @@ struct FrameScheduler::Impl {
      * half_interval = frame_interval / 2
      *
      * pts < expected_pts - half_interval → DROP（滞后太多）
-     * pts > expected_pts + half_interval → DUPLICATE（超前太多）
+     * pts > expected_pts + half_interval → DUPLICATE（超前太多，重复上一帧
+     *   并把显示时间轴重同步到该帧的 PTS 槽位）
      * 否则 → DISPLAY
      */
     ScheduleResult doSchedule(int frame_id, double pts_ms) {
@@ -70,9 +73,13 @@ struct FrameScheduler::Impl {
             result.scheduled_pts_ms = last_displayed_pts_ms;
             frames_dropped++;
         } else if (diff > half_interval) {
-            // 视频超前超过半帧：重复上一帧
+            // 视频超前超过半帧：重复上一帧填补空隙。
+            // 显示时间轴必须重同步到输入帧的 PTS：若只推进一个帧间隔，
+            // 当输入节奏与帧间隔一致时 diff 恒定不变，调度器会永久停留在
+            // DUPLICATE —— 上一帧内容被无限重复，输出队列随之饥饿。
             result.action = FrameAction::DUPLICATE;
-            result.scheduled_pts_ms = last_displayed_pts_ms + frame_interval;
+            result.scheduled_pts_ms = pts_ms;
+            last_displayed_pts_ms = pts_ms;
             frames_duplicated++;
         } else {
             // 正常显示
@@ -148,7 +155,7 @@ FrameScheduler& FrameScheduler::operator=(FrameScheduler&&) noexcept = default;
 void FrameScheduler::Init(const SchedulerConfig& config) {
     impl_->config = config;
     if (impl_->config.target_fps <= 0.0) {
-        std::cerr << "[FrameScheduler] Init: target_fps <= 0，使用默认 30fps" << std::endl;
+        DH_LOG_WARN("frame_scheduler") << "Init: target_fps <= 0，使用默认 30fps";
         impl_->config.target_fps = 30.0;
     }
     if (impl_->config.max_pending_frames <= 0) {
@@ -167,7 +174,7 @@ bool FrameScheduler::IsInitialized() const {
 
 ScheduleResult FrameScheduler::ScheduleFrame(int frame_id, double pts_ms) {
     if (!impl_->initialized) {
-        std::cerr << "[FrameScheduler] ScheduleFrame: 未初始化" << std::endl;
+        DH_LOG_ERROR("frame_scheduler") << "ScheduleFrame: 未初始化";
         ScheduleResult err;
         err.action = FrameAction::DROP;
         return err;
@@ -212,7 +219,7 @@ void FrameScheduler::Reset() {
 
 void FrameScheduler::SetTargetFps(double fps) {
     if (fps <= 0.0) {
-        std::cerr << "[FrameScheduler] SetTargetFps: fps <= 0" << std::endl;
+        DH_LOG_ERROR("frame_scheduler") << "SetTargetFps: fps <= 0";
         return;
     }
     impl_->config.target_fps = fps;

@@ -10,6 +10,7 @@
 #include "core/thread_base.h"
 #include "core/frame_scheduler.h"
 #include "core/av_sync.h"
+#include "digital_human/export.h"
 
 namespace digital_human {
 namespace core {
@@ -72,7 +73,7 @@ struct PipelineQueueDepths {
 };
 
 /// @brief Pipeline 运行时指标
-struct PipelineMetrics {
+struct DH_API PipelineMetrics {
     int64_t total_frames_in       = 0;
     int64_t total_frames_out      = 0;
     int64_t frames_dropped        = 0;
@@ -130,7 +131,7 @@ struct PipelineMetrics {
  *
  * 线程安全：Pipeline 本身线程安全，所有内部状态通过队列和原子变量隔离。
  */
-class Pipeline {
+class DH_API Pipeline {
 public:
     Pipeline();
     ~Pipeline();
@@ -177,7 +178,7 @@ public:
      */
     /// @return true  all workers exited before the shared deadline
     /// @return false at least one worker is still running; Stop may be retried
-    bool Stop();
+    bool Stop(int timeout_ms = -1);
 
     /// @brief 检查 Pipeline 是否在运行
     bool IsRunning() const;

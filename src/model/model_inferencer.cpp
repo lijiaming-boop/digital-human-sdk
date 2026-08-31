@@ -1,4 +1,5 @@
 #include "model/model_inferencer.h"
+#include "digital_human/log_macros.h"
 
 #include <algorithm>
 #include <atomic>
@@ -51,7 +52,7 @@ bool AcquireVulkanInstance(int& device_index, int& device_count,
         if (ret != 0) {
             failure_reason = "create_gpu_instance failed (ret="
                            + std::to_string(ret) + ")";
-            std::cerr << "[ModelInferencer] " << failure_reason << std::endl;
+            DH_LOG_ERROR("model.inferencer") << failure_reason;
             return false;
         }
     }
@@ -60,7 +61,7 @@ bool AcquireVulkanInstance(int& device_index, int& device_count,
     device_count = gpu_count;
     if (gpu_count <= 0) {
         failure_reason = "Vulkan is compiled in, but no usable physical GPU was found";
-        std::cerr << "[ModelInferencer] " << failure_reason << std::endl;
+        DH_LOG_ERROR("model.inferencer") << failure_reason;
         if (g_vulkan_instance_users == 0) {
             ncnn::destroy_gpu_instance();
         }
@@ -198,7 +199,7 @@ struct ModelInferencer::Impl {
         vulkan_status.available = false;
         vulkan_status.enabled = false;
         vulkan_status.message = "ncnn was built without Vulkan support";
-        std::cerr << "[ModelInferencer] " << vulkan_status.message << std::endl;
+        DH_LOG_ERROR("model.inferencer") << vulkan_status.message;
         return false;
 #endif
     }
@@ -229,15 +230,13 @@ struct ModelInferencer::Impl {
 #endif
 
         if (net.load_param(param_path.c_str()) != 0) {
-            std::cerr << "[ModelInferencer] ?? param ??: "
-                      << param_path << std::endl;
+            DH_LOG_ERROR("model.inferencer") << "?? param ??: " << param_path;
             net.clear();
             if (gpu) ReleaseVulkan();
             return false;
         }
         if (net.load_model(bin_path.c_str()) != 0) {
-            std::cerr << "[ModelInferencer] ?? bin ??: "
-                      << bin_path << std::endl;
+            DH_LOG_ERROR("model.inferencer") << "?? bin ??: " << bin_path;
             net.clear();
             if (gpu) ReleaseVulkan();
             return false;
@@ -257,8 +256,8 @@ struct ModelInferencer::Impl {
         ncnn::Mat warmup_out;
         const int ret = ex.extract(kOutputName, warmup_out);
         if (ret != 0 || warmup_out.empty()) {
-            std::cerr << "[ModelInferencer] warmup inference failed (ret=" << ret
-                      << ", output_empty=" << warmup_out.empty() << ")" << std::endl;
+            DH_LOG_ERROR("model.inferencer") << "warmup inference failed (ret=" << ret
+                      << ", output_empty=" << warmup_out.empty() << ")";
             return false;
         }
         return true;
@@ -292,8 +291,7 @@ struct ModelInferencer::Impl {
                 return false;
             }
             use_gpu = false;
-            std::cerr << "[ModelInferencer] GPU unavailable; falling back to CPU"
-                      << std::endl;
+            DH_LOG_WARN("model.inferencer") << "GPU unavailable; falling back to CPU";
         }
 
         // ---- warmup ----
@@ -309,7 +307,7 @@ struct ModelInferencer::Impl {
         ncnn::Mat warmup_out;
         int ret = ex.extract(kOutputName, warmup_out);
         if ((ret != 0 || warmup_out.empty()) && use_gpu) {
-            std::cerr << "[ModelInferencer] GPU warmup failed; falling back to CPU" << std::endl;
+            DH_LOG_WARN("model.inferencer") << "GPU warmup failed; falling back to CPU";
             vulkan_status.available = false;
             vulkan_status.enabled = false;
             vulkan_status.message = "Vulkan model warmup failed; CPU fallback selected";
@@ -322,8 +320,8 @@ struct ModelInferencer::Impl {
             }
         }
         if (ret != 0 || warmup_out.empty()) {
-            std::cerr << "[ModelInferencer] warmup 推理失败 (ret="
-                      << ret << ")，模型可能不兼容" << std::endl;
+            DH_LOG_ERROR("model.inferencer") << "warmup 推理失败 (ret="
+                      << ret << ")，模型可能不兼容";
             return false;
         }
 
@@ -332,9 +330,9 @@ struct ModelInferencer::Impl {
             vulkan_status.available = true;
             vulkan_status.enabled = true;
             vulkan_status.message = "Vulkan device passed real Wav2Lip warmup inference";
-            std::cout << "[ModelInferencer] Vulkan GPU enabled (device="
+            DH_LOG_INFO("model.inferencer") << "Vulkan GPU enabled (device="
                       << gpu_device_index << ", total_devices="
-                      << ncnn::get_gpu_count() << ")" << std::endl;
+                      << ncnn::get_gpu_count() << ")";
         }
 #endif
 
@@ -369,16 +367,14 @@ struct ModelInferencer::Impl {
             BenchmarkResult r = benchmark(t, false);
             if (r.success) {
                 results.push_back(r);
-                std::cout << "[ModelInferencer]   CPU " << t << "线程: "
+                DH_LOG_INFO("model.inferencer") << "  CPU " << t << "线程: "
                           << r.avg_latency_ms << " ms"
-                          << (r.avg_latency_ms <= target_latency_ms ? " ✓" : "")
-                          << std::endl;
+                          << (r.avg_latency_ms <= target_latency_ms ? " ✓" : "");
             }
         }
 
         if (results.empty()) {
-            std::cerr << "[ModelInferencer] benchmark 全部失败，使用默认 2 线程"
-                      << std::endl;
+            DH_LOG_ERROR("model.inferencer") << "benchmark 全部失败，使用默认 2 线程";
             num_threads = 2;
             return;
         }
@@ -401,31 +397,28 @@ struct ModelInferencer::Impl {
         }
 
         num_threads = best.num_threads;
-        std::cout << "[ModelInferencer] CPU 最优: " << num_threads
+        DH_LOG_INFO("model.inferencer") << "CPU 最优: " << num_threads
                   << " 线程, " << best.avg_latency_ms << " ms"
-                  << (best.avg_latency_ms <= target_latency_ms ? " ✓" : " ✗")
-                  << std::endl;
+                  << (best.avg_latency_ms <= target_latency_ms ? " ✓" : " ✗");
 
         // ---- GPU 回退 ----
         if (best.avg_latency_ms > target_latency_ms) {
             // CPU 不达标，尝试 GPU 加速
             // 直接运行 GPU benchmark 检测 Vulkan 可用性
-            std::cout << "[ModelInferencer] CPU 未达标，尝试 GPU 加速..." << std::endl;
+            DH_LOG_INFO("model.inferencer") << "CPU 未达标，尝试 GPU 加速...";
             BenchmarkResult gpu_r = benchmark(1, true);
             if (gpu_r.success) {
-                std::cout << "[ModelInferencer]   GPU: "
+                DH_LOG_INFO("model.inferencer") << "  GPU: "
                           << gpu_r.avg_latency_ms << " ms"
-                          << (gpu_r.avg_latency_ms <= target_latency_ms ? " ✓" : " ✗")
-                          << std::endl;
+                          << (gpu_r.avg_latency_ms <= target_latency_ms ? " ✓" : " ✗");
                 if (gpu_r.avg_latency_ms <= best.avg_latency_ms ||
                     gpu_r.avg_latency_ms <= target_latency_ms) {
                     use_gpu = true;
                     num_threads = 1;  // GPU 模式下线程数无关紧要
-                    std::cout << "[ModelInferencer] 启用 GPU 加速" << std::endl;
+                    DH_LOG_INFO("model.inferencer") << "启用 GPU 加速";
                 }
             } else {
-                std::cout << "[ModelInferencer] Vulkan GPU 不可用或推理失败，保持 CPU 模式"
-                          << std::endl;
+                DH_LOG_WARN("model.inferencer") << "Vulkan GPU 不可用或推理失败，保持 CPU 模式";
             }
         }
 
@@ -522,7 +515,7 @@ struct ModelInferencer::Impl {
     ncnn::Mat doInfer(const ncnn::Mat& audio, const ncnn::Mat& face) {
         // ---- 输入校验 ----
         if (audio.empty() || face.empty()) {
-            std::cerr << "[ModelInferencer] 推理失败：输入数据为空" << std::endl;
+            DH_LOG_ERROR("model.inferencer") << "推理失败：输入数据为空";
             return ncnn::Mat();
         }
 
@@ -542,7 +535,7 @@ struct ModelInferencer::Impl {
         auto t1 = std::chrono::steady_clock::now();
 
         if (ret != 0) {
-            std::cerr << "[ModelInferencer] 推理失败 (ret=" << ret << ")" << std::endl;
+            DH_LOG_ERROR("model.inferencer") << "推理失败 (ret=" << ret << ")";
             return ncnn::Mat();
         }
 
@@ -586,12 +579,12 @@ bool ModelInferencer::Init(const std::string& model_dir) {
 bool ModelInferencer::Init(const std::string& param_path,
                            const std::string& bin_path) {
     if (impl_->initialized) {
-        std::cerr << "[ModelInferencer] 重复初始化，跳过" << std::endl;
+        DH_LOG_WARN("model.inferencer") << "重复初始化，跳过";
         return true;
     }
     bool ok = impl_->doInit(param_path, bin_path);
     if (!ok) {
-        std::cerr << "[ModelInferencer] 初始化失败" << std::endl;
+        DH_LOG_ERROR("model.inferencer") << "初始化失败";
     }
     return ok;
 }
@@ -605,7 +598,7 @@ bool ModelInferencer::IsInitialized() const {
 ncnn::Mat ModelInferencer::Infer(const ncnn::Mat& audio_feat,
                                  const ncnn::Mat& face_input) {
     if (!impl_->initialized) {
-        std::cerr << "[ModelInferencer] 推理失败：未初始化，请先调用 Init()" << std::endl;
+        DH_LOG_ERROR("model.inferencer") << "推理失败：未初始化，请先调用 Init()";
         return ncnn::Mat();
     }
     return impl_->doInfer(audio_feat, face_input);
@@ -630,8 +623,8 @@ void ModelInferencer::SetThreadCount(int n) {
     // receive the requested thread count.
     if (impl_->initialized && !impl_->use_gpu) {
         if (!impl_->loadNet(requested_threads, false)) {
-            std::cerr << "[ModelInferencer] failed to reload model for "
-                      << requested_threads << " threads" << std::endl;
+            DH_LOG_ERROR("model.inferencer") << "failed to reload model for "
+                      << requested_threads << " threads";
             return;
         }
     }
@@ -639,8 +632,7 @@ void ModelInferencer::SetThreadCount(int n) {
 
     // 启用 GPU 时线程数设置不生效
     if (impl_->use_gpu) {
-        std::cout << "[ModelInferencer] 当前为 GPU 模式，线程数设置将在关闭 GPU 后生效"
-                  << std::endl;
+        DH_LOG_INFO("model.inferencer") << "当前为 GPU 模式，线程数设置将在关闭 GPU 后生效";
     }
 }
 
@@ -656,8 +648,7 @@ VulkanStatus ModelInferencer::GetVulkanStatus() const {
 
 bool ModelInferencer::EnableGPU(bool enable) {
     if (!impl_->initialized) {
-        std::cerr << "[ModelInferencer] GPU mode can only be changed after Init()"
-                  << std::endl;
+        DH_LOG_ERROR("model.inferencer") << "GPU mode can only be changed after Init()";
         return false;
     }
 
@@ -692,8 +683,7 @@ bool ModelInferencer::EnableGPU(bool enable) {
         int ret = ex.extract(impl_->kOutputName, out);
         if (ret != 0 || out.empty()) {
             impl_->loadNet(impl_->num_threads, false);
-            std::cerr << "[ModelInferencer] GPU 模式不可用：Vulkan 推理失败"
-                      << std::endl;
+            DH_LOG_ERROR("model.inferencer") << "GPU 模式不可用：Vulkan 推理失败";
             impl_->use_gpu = false;
             impl_->vulkan_status.available = false;
             impl_->vulkan_status.enabled = false;
@@ -704,10 +694,10 @@ bool ModelInferencer::EnableGPU(bool enable) {
         impl_->vulkan_status.available = true;
         impl_->vulkan_status.enabled = true;
         impl_->vulkan_status.message = "Vulkan device passed real Wav2Lip inference";
-        std::cout << "[ModelInferencer] GPU 加速已启用" << std::endl;
+        DH_LOG_INFO("model.inferencer") << "GPU 加速已启用";
     } else {
         if (impl_->use_gpu && !impl_->loadNet(impl_->num_threads, false)) {
-            std::cerr << "[ModelInferencer] failed to switch back to CPU" << std::endl;
+            DH_LOG_ERROR("model.inferencer") << "failed to switch back to CPU";
             return false;
         }
         impl_->use_gpu = false;
@@ -715,7 +705,7 @@ bool ModelInferencer::EnableGPU(bool enable) {
         if (impl_->vulkan_status.available) {
             impl_->vulkan_status.message = "Vulkan verified, currently disabled by caller";
         }
-        std::cout << "[ModelInferencer] GPU 加速已关闭，使用 CPU 推理" << std::endl;
+        DH_LOG_INFO("model.inferencer") << "GPU 加速已关闭，使用 CPU 推理";
     }
     return true;
 }
@@ -763,20 +753,20 @@ void ModelInferencer::ResetStats() {
 
 void ModelInferencer::PrintStats() const {
     int64_t count = GetInferenceCount();
-    std::cout << "[ModelInferencer] === 性能统计 ===" << std::endl;
-    std::cout << "[ModelInferencer]   推理次数:     " << count << std::endl;
+    DH_LOG_INFO("model.inferencer") << "=== 性能统计 ===";
+    DH_LOG_INFO("model.inferencer") << "  推理次数:     " << count;
     if (count > 0) {
-        std::cout << "[ModelInferencer]   平均延迟:     "
-                  << GetAvgLatencyMs() << " ms" << std::endl;
-        std::cout << "[ModelInferencer]   最小延迟:     "
-                  << GetMinLatencyMs() << " ms" << std::endl;
-        std::cout << "[ModelInferencer]   最大延迟:     "
-                  << GetMaxLatencyMs() << " ms" << std::endl;
+        DH_LOG_INFO("model.inferencer") << "  平均延迟:     "
+                  << GetAvgLatencyMs() << " ms";
+        DH_LOG_INFO("model.inferencer") << "  最小延迟:     "
+                  << GetMinLatencyMs() << " ms";
+        DH_LOG_INFO("model.inferencer") << "  最大延迟:     "
+                  << GetMaxLatencyMs() << " ms";
     }
-    std::cout << "[ModelInferencer]   线程数:       " << GetThreadCount() << std::endl;
-    std::cout << "[ModelInferencer]   GPU 加速:     "
-              << (IsGPUEnabled() ? "yes" : "no") << std::endl;
-    std::cout << "[ModelInferencer] ===================" << std::endl;
+    DH_LOG_INFO("model.inferencer") << "  线程数:       " << GetThreadCount();
+    DH_LOG_INFO("model.inferencer") << "  GPU 加速:     "
+              << (IsGPUEnabled() ? "yes" : "no");
+    DH_LOG_INFO("model.inferencer") << "===================";
 }
 
 }  // namespace model

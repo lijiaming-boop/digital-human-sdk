@@ -202,9 +202,12 @@ CLI 会把后续头像缩放到初始编码画布，但 `ConversationSession::Up
 
 ### 3.7 P1：单体库耦合过高
 
-#### 现状
+> 详细实施方案：[P1 级实施方案 — §3.7](p1_implementation_plan.md#p1-37-模块化独立-target-完善)
+> 解耦技术报告：[单体库解耦技术报告](decoupling_report.md)
 
-当前全部源码被编译进单一 `digital_human_core` 共享库，OpenCV、ncnn、FFmpeg、PortAudio 和 OpenMP 大量作为公共依赖传播。即使调用方只需要头像校验或纯推理，也需要准备完整依赖。
+#### 现状（已完成 OBJECT 库拆分）
+
+已按职责拆分为 7 个 OBJECT 库 + 1 个 SHARED facade，编译期依赖方向已被 CMake 约束。待完善：OBJECT 库升级为可独立安装的 STATIC 库，增加符号可见性控制和 install 规则。
 
 #### 目标模块
 
@@ -228,6 +231,8 @@ CLI 会把后续头像缩放到初始编码画布，但 `ConversationSession::Up
 
 ### 3.8 P1：缺少正式 SDK 安装、ABI 与版本策略
 
+> 详细实施方案：[P1 级实施方案 — §3.8](p1_implementation_plan.md#p1-38-sdk-安装abi-与版本策略)
+
 #### 现状
 
 - 没有 `install()`、CMake package export、pkg-config 或稳定发布包；
@@ -246,6 +251,8 @@ CLI 会把后续头像缩放到初始编码画布，但 `ConversationSession::Up
 - 统一错误结构：错误码、模块、可读消息和底层原因。
 
 ### 3.9 P1：可观测性尚不足以支撑生产定位
+
+> 详细实施方案：[P1 级实施方案 — §3.9](p1_implementation_plan.md#p1-39-可观测性体系)
 
 #### 现状
 
@@ -272,6 +279,8 @@ Pipeline 已有队列、推理和生命周期指标，但会话、HTTP、TTS、B
 - E2E 测试保存机器、配置、模型版本和完整阶段延迟。
 
 ### 3.10 P1：多轮对话仍缺少产品级能力
+
+> 详细实施方案：[P1 级实施方案 — §3.10](p1_implementation_plan.md#p1-310-多轮对话产品级能力)
 
 #### 当前边界
 
@@ -534,6 +543,8 @@ M3 解决正式交付，M4 解决产品入口，M5 建立生产运行和持续�
 
 ## 9. 相关文档
 
+- [P2 可靠性、质量门禁与依赖解耦实施报告](p2_implementation_report.md)
+
 - [架构总览](overview.md)
 - [第一阶段稳定性改造](phase1_stability_refactor.md)
 - [第二阶段生命周期与可观测性改造](phase2_lifecycle_observability_refactor.md)
@@ -542,3 +553,5 @@ M3 解决正式交付，M4 解决产品入口，M5 建立生产运行和持续�
 - [端到端验收指南](../guides/end_to_end_validation.md)
 - [性能优化计划](../perf/performance_optimization_plan.md)
 - [模型精度与量化指南](../models/model_precision_quantization_guide.md)
+- [P1 级实施方案](p1_implementation_plan.md)
+- [单体库解耦技术报告](decoupling_report.md)

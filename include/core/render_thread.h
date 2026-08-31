@@ -9,10 +9,11 @@
 #include "core/thread_safe_queue.h"
 #include "core/packet.h"
 #include "core/frame_scheduler.h"
+#include "digital_human/export.h"
 
 namespace digital_human {
 namespace audio {
-class AudioPlayer;
+class IAudioPlayer;
 }
 namespace model {
 class OutputProcessor;
@@ -42,7 +43,7 @@ struct RenderConfig {
 // ============================================================================
 
 /// @brief 渲染线程运行时指标
-struct RenderMetrics {
+struct DH_API RenderMetrics {
     int64_t frames_rendered     = 0;     ///< 渲染帧数
     int64_t frames_displayed    = 0;     ///< 实际显示帧数
     int64_t frames_dropped      = 0;     ///< 丢弃帧数
@@ -80,7 +81,7 @@ using FrameCallback = std::function<void(const cv::Mat& frame,
  * - 帧间隔调节稳定输出帧率
  * - 帧输出回调（可接入显示窗口或编码器）
  */
-class RenderThread : public ThreadBase {
+class DH_API RenderThread : public ThreadBase {
 public:
     explicit RenderThread(const std::string& name = "RenderThread");
     ~RenderThread() override;
@@ -105,7 +106,7 @@ public:
     void SetOutputProcessor(model::OutputProcessor* processor);
 
     /// @brief 设置 AudioPlayer（用于音频同步时钟，可选）
-    void SetAudioPlayer(audio::AudioPlayer* player);
+    void SetAudioPlayer(audio::IAudioPlayer* player);
 
     // ========================================================================
     // 队列

@@ -66,6 +66,7 @@ docs/interview_faq_framework_inference.md
 face_detector_result.jpg
 landmark_result.jpg
 face_mask_debug.png
+assets/verify/
 
 ############################## Python
 __pycache__/

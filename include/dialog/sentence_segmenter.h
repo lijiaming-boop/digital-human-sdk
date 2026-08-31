@@ -1,4 +1,5 @@
 #pragma once
+#include "digital_human/export.h"
 
 #include <cstddef>
 #include <string>
@@ -7,12 +8,12 @@
 namespace digital_human {
 namespace dialog {
 
-struct SentenceSegmenterConfig {
+struct DH_API SentenceSegmenterConfig {
     size_t min_weak_boundary_chars = 8;
 };
 
 /// Incrementally turns UTF-8 model output into TTS-friendly clauses.
-class SentenceSegmenter {
+class DH_API SentenceSegmenter {
 public:
     explicit SentenceSegmenter(
         SentenceSegmenterConfig config = SentenceSegmenterConfig{});

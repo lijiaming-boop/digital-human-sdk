@@ -307,9 +307,9 @@ void TestPipelineInterface() {
         TEST_CHECK(!pipeline.IsRunning(),
             "Stop 后 IsRunning = false");
 
-        // 再次 Start/Stop
+        // Pipeline 是一次性对象，Stop 后必须拒绝重启。
         started = pipeline.Start();
-        TEST_CHECK(started, "Pipeline 重新 Start 成功");
+        TEST_CHECK(!started, "Pipeline Stop 后拒绝重新 Start");
         pipeline.Stop();
         TEST_CHECK(!pipeline.IsRunning(),
             "再次 Stop 后 IsRunning = false");

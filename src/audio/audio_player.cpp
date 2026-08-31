@@ -1,4 +1,5 @@
 #include "audio/audio_player.h"
+#include "digital_human/log_macros.h"
 
 #include <algorithm>
 #include <atomic>
@@ -165,7 +166,7 @@ struct AudioPlayer::Impl {
     /// @brief 设置错误消息
     void setError(const std::string& msg) {
         last_error_msg = msg;
-        std::cerr << "[AudioPlayer] " << msg << std::endl;
+        DH_LOG_ERROR("audio_player") << msg;
     }
 
     /// @brief 获取当前播放状态下允许的 PaTime（考虑暂停）

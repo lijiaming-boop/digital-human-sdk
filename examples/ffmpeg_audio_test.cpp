@@ -64,7 +64,11 @@ int main(int argc, char** argv) {
 
     std::cout << "[Success] Decoder initialized: " << codec->name << std::endl;
     std::cout << "    -> Sample Rate: " << codec_ctx->sample_rate << " Hz" << std::endl;
+#if LIBAVUTIL_VERSION_MAJOR >= 57
     std::cout << "    -> Channels: " << codec_ctx->ch_layout.nb_channels << std::endl;
+#else
+    std::cout << "    -> Channels: " << codec_ctx->channels << std::endl;
+#endif
 
     // 4. 读取与解码循环 (Decode Loop)
     // ------------------------------------

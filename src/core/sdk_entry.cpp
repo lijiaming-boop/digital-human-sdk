@@ -17,7 +17,9 @@
 #include <utility>
 
 #include "core/pipeline.h"
+#ifdef DIGITAL_HUMAN_HAS_AUDIO_LOADER
 #include "audio/audio_loader.h"
+#endif
 #include "core/image_loader.h"
 
 namespace digital_human {
@@ -29,7 +31,9 @@ namespace digital_human {
 struct DigitalHumanSDK::Impl {
     // ---- 核心模块 ----
     std::unique_ptr<core::Pipeline> pipeline;
+#ifdef DIGITAL_HUMAN_HAS_AUDIO_LOADER
     audio::AudioLoader              audio_loader;
+#endif
     core::ImageLoader               image_loader;
 
     // ---- 配置缓存 ----
@@ -185,7 +189,7 @@ struct DigitalHumanSDK::Impl {
         return SDKError::OK;
     }
 
-    SDKError StopUnlocked() {
+    SDKError StopUnlocked(int timeout_ms = -1) {
         const SDKState current = state.load(std::memory_order_acquire);
         if (current == SDKState::UNINITIALIZED || current == SDKState::STOPPED) {
             return SDKError::OK;
@@ -193,7 +197,7 @@ struct DigitalHumanSDK::Impl {
         if (current != SDKState::STOPPING) {
             TransitionStateUnlocked(SDKState::STOPPING);
         }
-        if (pipeline && !pipeline->Stop()) {
+        if (pipeline && !pipeline->Stop(timeout_ms)) {
             return Fail(SDKError::SHUTDOWN_TIMEOUT,
                         "Stop: shutdown timeout; call Stop again to retry");
         }
@@ -323,9 +327,9 @@ SDKError DigitalHumanSDK::Start() {
     return impl_->StartUnlocked();
 }
 
-SDKError DigitalHumanSDK::Stop() {
+SDKError DigitalHumanSDK::Stop(int timeout_ms) {
     std::lock_guard<std::mutex> lifecycle_lock(impl_->lifecycle_mutex);
-    return impl_->StopUnlocked();
+    return impl_->StopUnlocked(timeout_ms);
 }
 
 SDKError DigitalHumanSDK::Pause() {
@@ -505,6 +509,14 @@ SDKError DigitalHumanSDK::ProcessFile(const std::string& audio_path,
         impl_->SetLastError("ProcessFile: 回调为空");
         return SDKError::INVALID_INPUT;
     }
+
+#ifndef DIGITAL_HUMAN_HAS_AUDIO_LOADER
+    (void)audio_path;
+    (void)image_path;
+    impl_->SetLastError(
+        "ProcessFile: audio file loading is unavailable in this build");
+    return SDKError::AUDIO_LOAD_FAILED;
+#else
 
     // ---- 1. 加载音频文件 ----
     audio::AudioData audio_data;
@@ -721,6 +733,7 @@ SDKError DigitalHumanSDK::ProcessFile(const std::string& audio_path,
     impl_->SetLastError(result == SDKError::OK ? "" : result_error_message);
 
     return result;
+#endif
 }
 
 // ============================================================================

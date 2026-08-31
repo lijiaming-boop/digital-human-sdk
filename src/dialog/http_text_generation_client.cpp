@@ -1,4 +1,4 @@
-#include "dialog/text_generation_client.h"
+#include "dialog/http_text_generation_client.h"
 
 #include <algorithm>
 #include <cctype>

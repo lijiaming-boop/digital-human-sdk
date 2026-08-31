@@ -4,6 +4,7 @@
 #include <opencv2/imgproc.hpp>
 
 #include "core/face_mask_generator.h"
+#include "digital_human/log_macros.h"
 
 namespace digital_human {
 namespace core {
@@ -20,8 +21,8 @@ cv::Mat generateMouthMask(const cv::Size& image_size,
 
     // 2. 检查关键点个数
     if (landmarks.size() < 68) {
-        std::cerr << "[FaceMaskGenerator] Error: Invalid landmarks count: "
-                  << landmarks.size() << std::endl;
+        DH_LOG_ERROR("face_mask") << "Error: Invalid landmarks count: "
+                  << landmarks.size();
         return mask;
     }
 
@@ -64,8 +65,8 @@ cv::Mat generatePreciseMouthAlphaMask96(const std::vector<cv::Point2f>& landmark
     cv::Mat mask_u8 = cv::Mat::zeros(mask_size, CV_8UC1);
 
     if (landmarks_96.size() < 68) {
-        std::cerr << "[FaceMaskGenerator] Invalid 96 landmarks count: "
-                  << landmarks_96.size() << std::endl;
+        DH_LOG_ERROR("face_mask") << "Invalid 96 landmarks count: "
+                  << landmarks_96.size();
 
         cv::Mat empty_mask;
         mask_u8.convertTo(empty_mask, CV_32FC1, 1.0 / 255.0);

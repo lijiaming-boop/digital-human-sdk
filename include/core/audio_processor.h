@@ -8,6 +8,7 @@
 #include "core/thread_base.h"
 #include "core/thread_safe_queue.h"
 #include "core/packet.h"
+#include "digital_human/export.h"
 
 namespace digital_human {
 namespace audio {
@@ -67,7 +68,7 @@ struct AudioProcessorConfig {
  * - 文件模式：SetAudioSource() 指定完整 PCM 缓冲区
  * - 流式模式：SetRingBuffer() 指定 RingBuffer
  */
-class AudioProcessor : public ThreadBase {
+class DH_API AudioProcessor : public ThreadBase {
 public:
     /// @brief 构造音频处理器
     /// @param name 线程名称（默认 "AudioProcessor"）

@@ -11,11 +11,12 @@
 
 #include "audio/audio_player.h"
 #include "model/output_processor.h"
+#include "digital_human/log_macros.h"
 
 namespace digital_human {
 namespace core {
 
-using audio::AudioPlayer;
+using audio::IAudioPlayer;
 using model::OutputProcessor;
 
 // ============================================================================
@@ -47,7 +48,7 @@ struct RenderThread::Impl {
 
     // ---- 外部模块 ----
     OutputProcessor*               output_processor_ = nullptr;
-    AudioPlayer*                   audio_player_     = nullptr;
+    IAudioPlayer*                  audio_player_     = nullptr;
 
     // ---- 队列 ----
     ThreadSafeQueue<InferenceOutputPacket>* input_queue_  = nullptr;
@@ -144,18 +145,18 @@ struct RenderThread::Impl {
         last_drift_ms_.store(drift, std::memory_order_relaxed);
 
         if (std::abs(drift) >= config.max_drift_ms) {
-            std::cout << "[RenderThread] 严重偏移: drift="
-                      << drift << "ms, DROP" << std::endl;
+            DH_LOG_WARN("render_thread") << "严重偏移: drift="
+                      << drift << "ms, DROP";
             return FrameAction::DROP;
         }
         if (drift > config.sync_threshold_ms) {
-            std::cout << "[RenderThread] 视频超前: drift="
-                      << drift << "ms, DUPLICATE" << std::endl;
+            DH_LOG_WARN("render_thread") << "视频超前: drift="
+                      << drift << "ms, DUPLICATE";
             return FrameAction::DUPLICATE;
         }
         if (drift < -config.sync_threshold_ms) {
-            std::cout << "[RenderThread] 视频滞后: drift="
-                      << drift << "ms, DROP" << std::endl;
+            DH_LOG_WARN("render_thread") << "视频滞后: drift="
+                      << drift << "ms, DROP";
             return FrameAction::DROP;
         }
 
@@ -250,7 +251,7 @@ void RenderThread::SetOutputProcessor(OutputProcessor* processor) {
     impl_->output_processor_ = processor;
 }
 
-void RenderThread::SetAudioPlayer(AudioPlayer* player) {
+void RenderThread::SetAudioPlayer(IAudioPlayer* player) {
     impl_->audio_player_ = player;
 }
 
@@ -406,6 +407,15 @@ void RenderThread::Run() {
                             impl_->last_frame_,
                             pkt.header.pts_ms,
                             impl_->frame_id_);
+                    }
+                    // 重复帧同样要进入输出队列：DUPLICATE 的职责是填补输出
+                    // 时间轴的空隙，只回调不入队会让 GetOutputFrame 消费者
+                    // 饿死（ProcessFile 场景表现为 stall 超时）。
+                    if (impl_->output_queue_) {
+                        OutputFramePacket out;
+                        out.InheritHeader(pkt.header);
+                        out.payload = impl_->last_frame_;
+                        impl_->output_queue_->Push(std::move(out));
                     }
                     impl_->frames_displayed_++;
                     impl_->frames_duplicated_++;

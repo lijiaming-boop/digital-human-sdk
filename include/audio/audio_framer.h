@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <string>
 #include <cstdint>
+#include "digital_human/export.h"
 
 namespace digital_human {
 namespace audio {
@@ -14,7 +15,7 @@ struct FrameConfig {
     int hopSize = 160;
 };
 
-class AudioFramer {
+class DH_API AudioFramer {
 public:
     AudioFramer();
     ~AudioFramer();
@@ -31,7 +32,7 @@ private:
     std::unique_ptr<Impl> impl_;
 };
 
-class AudioFramerException : public std::runtime_error {
+class DH_API AudioFramerException : public std::runtime_error {
 public:
     explicit AudioFramerException(const std::string& message)
         : std::runtime_error(message) {}

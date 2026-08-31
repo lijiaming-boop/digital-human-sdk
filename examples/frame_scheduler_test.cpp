@@ -359,6 +359,68 @@ static void testBulkFrames() {
     std::cout << "  [INFO] " << stats.ToString() << std::endl;
 }
 
+// ---- Test 13: 丢帧后收敛（回归：DUPLICATE 死循环修复） ----
+static void testDuplicateRecovery() {
+    TEST_NAME("Test 13: 丢帧后收敛（DUPLICATE 不冻结）");
+
+    FrameScheduler sched;
+    sched.Init(defaultConfig());
+
+    // 正常两帧后丢一帧（PTS=80 缺失），验证后续帧重新收敛到 DISPLAY。
+    // 修复前：120ms 触发一次 DUPLICATE 后参考 PTS 永不推进，
+    // 160/200/240... 全部永久 DUPLICATE（渲染冻结、输出队列饥饿）。
+    sched.ScheduleFrame(0, 0.0);
+    sched.OnFrameDisplayed(0.0);    // DISPLAY
+    sched.ScheduleFrame(1, 40.0);
+    sched.OnFrameDisplayed(40.0);   // DISPLAY
+
+    ScheduleResult r2 = sched.ScheduleFrame(2, 120.0);
+    TEST_CHECK(r2.action == FrameAction::DUPLICATE,
+               "13.1 缺帧后 120ms（超前 40ms）→ DUPLICATE");
+    TEST_CHECK(std::abs(r2.scheduled_pts_ms - 120.0) < 1e-9,
+               "13.2 DUPLICATE 重同步到输入帧槽位 120ms");
+
+    // PTS=80 的帧缺失：id=2 的帧携带 PTS=120，其后帧 PTS 依次 +40。
+    for (int i = 3; i <= 6; ++i) {
+        double pts = (i + 1) * 40.0;
+        ScheduleResult r = sched.ScheduleFrame(i, pts);
+        TEST_CHECK(r.action == FrameAction::DISPLAY,
+                   "13." << (i + 2) << " 帧" << i << " PTS=" << pts
+                         << "ms 恢复 DISPLAY");
+        sched.OnFrameDisplayed(pts);
+    }
+
+    FrameStats stats = sched.GetStats();
+    TEST_CHECK(stats.frames_duplicated == 1, "13.7 单次缺帧仅产生 1 个重复帧");
+}
+
+// ---- Test 14: 长时稳定性（回归：单次缺帧不扩散） ----
+static void testLongRunAfterGlitch() {
+    TEST_NAME("Test 14: 长时稳定性（单次缺帧不扩散）");
+
+    FrameScheduler sched;
+    sched.Init(defaultConfig());
+
+    const int kFrameCount = 100;
+    int displayed = 0, duplicated = 0;
+    for (int i = 0; i < kFrameCount; ++i) {
+        if (i == 50) continue;   // 模拟上游丢一帧
+        double pts = i * 40.0;
+        ScheduleResult r = sched.ScheduleFrame(i, pts);
+        if (r.action == FrameAction::DUPLICATE) {
+            duplicated++;
+        } else if (r.action == FrameAction::DISPLAY) {
+            displayed++;
+            sched.OnFrameDisplayed(pts);
+        }
+    }
+
+    TEST_CHECK(duplicated == 1,
+               "14.1 单帧缺失仅补 1 个重复帧 (duplicated=" << duplicated << ")");
+    TEST_CHECK(displayed == kFrameCount - 2,
+               "14.2 其余帧全部 DISPLAY (displayed=" << displayed << ")");
+}
+
 // ============================================================================
 // 主函数
 // ============================================================================
@@ -380,6 +442,8 @@ int main() {
     testReset();
     testMoveSemantics();
     testBulkFrames();
+    testDuplicateRecovery();
+    testLongRunAfterGlitch();
 
     // ==========================================
     // 汇总

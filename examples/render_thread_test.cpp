@@ -274,6 +274,46 @@ static void testSyncDecisions() {
 }
 
 // ============================================================================
+// Test 7b: DUPLICATE 帧进入输出队列（回归：重复帧饥饿修复）
+// ============================================================================
+static void testDuplicateQueued() {
+    TEST_NAME("Test 7b: DUPLICATE 帧进入输出队列（缺帧后不饥饿）");
+
+    ThreadSafeQueue<InferenceOutputPacket> input_queue;
+    ThreadSafeQueue<OutputFramePacket> output_queue;
+
+    RenderThread thread;
+    RenderConfig cfg;
+    cfg.enable_frame_pacing = false;
+    cfg.enable_audio_sync   = false;
+    cfg.pop_timeout_ms      = 50;
+    thread.SetConfig(cfg);
+    thread.SetInputQueue(&input_queue);
+    thread.SetOutputQueue(&output_queue);
+
+    thread.Start();
+    // 25fps 正常两帧后缺一帧（PTS=80 缺失）：120ms 产生一帧 DUPLICATE，
+    // 160/200 继续正常显示。修复前 DUPLICATE 不入队，输出队列只收到 2 帧。
+    input_queue.Push(makeInferPacket(0, 0));
+    input_queue.Push(makeInferPacket(40, 1));
+    input_queue.Push(makeInferPacket(120, 2));
+    input_queue.Push(makeInferPacket(160, 3));
+    input_queue.Push(makeInferPacket(200, 4));
+    input_queue.Push(InferenceOutputPacket::EOS());
+
+    int ok_frames = 0;
+    OutputFramePacket out;
+    while (output_queue.WaitAndPop(out, 500)) {
+        if (out.header.IsEOS()) break;
+        if (out.header.IsOK()) ok_frames++;
+    }
+    thread.Wait();
+
+    TEST_CHECK(ok_frames == 5, "7b.1 缺帧场景输出 5 帧（含 1 个 DUPLICATE）(count="
+               << ok_frames << ")");
+}
+
+// ============================================================================
 // Test 8: 统计指标
 // ============================================================================
 static void testMetrics() {
@@ -452,6 +492,7 @@ int main() {
     testMultiFrame();
     testFrameCallback();
     testSyncDecisions();
+    testDuplicateQueued();
     testMetrics();
     testBulkFrames();
     testGracefulShutdown();

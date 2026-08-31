@@ -3,9 +3,9 @@
 #include <string>
 #include <vector>
 
-#include "dialog/text_generation_client.h"
+#include "dialog/http_text_generation_client.h"
 #include "network/http_client.h"
-#include "tts/tts_client.h"
+#include "tts/http_tts_client.h"
 
 using namespace digital_human;
 
@@ -60,6 +60,35 @@ int main(int argc, char** argv) {
         std::cerr << "[FAIL] unexpected PCM sample count: " << sample_count
                   << '\n';
         return 1;
+    }
+
+    const std::string tts_url = argv[2];
+    const auto suffix = tts_url.rfind("/tts");
+    if (suffix == std::string::npos) {
+        std::cerr << "[FAIL] TTS URL must end in /tts\n";
+        return 1;
+    }
+    for (const auto& rejected_path : {"/tts-empty", "/tts-json"}) {
+        tts_config.endpoint = tts_url.substr(0, suffix) + rejected_path;
+        tts::HttpTTSClient rejected_client(tts_config);
+        size_t rejected_samples = 0;
+        error.clear();
+        if (rejected_client.Synthesize(
+                reply,
+                [&](tts::PCMChunk chunk) {
+                    rejected_samples += chunk.samples.size();
+                    return true;
+                },
+                []() { return false; }, error)) {
+            std::cerr << "[FAIL] invalid TTS response was accepted: "
+                      << rejected_path << '\n';
+            return 1;
+        }
+        if (rejected_samples != 0) {
+            std::cerr << "[FAIL] invalid TTS body reached PCM callback: "
+                      << rejected_path << '\n';
+            return 1;
+        }
     }
     std::cout << "[PASS] HTTP text and TTS service clients\n";
     return 0;

@@ -90,6 +90,22 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(payload)
             return
 
+        if self.path == "/tts-empty":
+            self.send_response(200)
+            self.send_header("Content-Type", "audio/pcm")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+
+        if self.path == "/tts-json":
+            payload = b'{"error":"synthetic TTS failure"}'
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+            return
+
         if self.path == "/tts":
             sample_rate = 16000
             samples = bytearray()

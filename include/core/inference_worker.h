@@ -9,6 +9,7 @@
 #include "core/thread_base.h"
 #include "core/thread_safe_queue.h"
 #include "core/packet.h"
+#include "digital_human/export.h"
 
 namespace digital_human {
 namespace model {
@@ -36,7 +37,7 @@ struct InferenceWorkerConfig {
 // ============================================================================
 
 /// @brief 推理线程运行时指标
-struct InferenceMetrics {
+struct DH_API InferenceMetrics {
     int64_t total_inferences       = 0;    ///< 总推理次数
     int64_t total_success          = 0;    ///< 成功次数
     int64_t total_failures         = 0;    ///< 失败次数
@@ -70,7 +71,7 @@ struct InferenceMetrics {
  * - 输入张量转换（cv::Mat → ncnn::Mat）
  * - 线程安全退出
  */
-class InferenceWorker : public ThreadBase {
+class DH_API InferenceWorker : public ThreadBase {
 public:
     /// @brief 构造推理线程
     /// @param name 线程名称

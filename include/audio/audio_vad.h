@@ -2,11 +2,12 @@
 
 #include <vector>
 #include <memory>
+#include "digital_human/export.h"
 
 namespace digital_human {
 namespace audio {
 
-class VoiceActivityDetector {
+class DH_API VoiceActivityDetector {
 public:
     VoiceActivityDetector(float energyThresh = 0.01f,
                           float zcrMin = 0.0f,
