@@ -271,8 +271,8 @@ int main() {
                 "生成失败保持 FAILED 终态");
     ok &= Check(failure_errors.load() == 1,
                 "生成失败只触发一次 on_error");
-    ok &= Check(failure_completions.load() == 0,
-                "失败 turn 不触发完成回调");
+    ok &= Check(failure_completions.load() == 1,
+                "失败 turn 也触发一次 on_turn_complete（不卡死回调编排器）");
     ok &= Check(failure_tts.calls.load() == 0,
                 "失败的部分 LLM 响应不会进入 TTS");
     failure_session.Stop(false);

@@ -89,6 +89,7 @@ dh_add_example(sdk_process_file_test    sdk_process_file_test.cpp)
 
 ############################## 会话模块测试（仅依赖抽象接口）
 dh_add_example(dialog_module_test       dialog_module_test.cpp)
+dh_add_example(conversation_session_lock_test conversation_session_lock_test.cpp)
 dh_add_example(avatar_upload_test       avatar_upload_test.cpp)
 dh_add_example(lifecycle_safety_test    lifecycle_safety_test.cpp)
 dh_add_example(conversation_sdk_integration_test conversation_sdk_integration_test.cpp)
@@ -146,6 +147,7 @@ if(BUILD_TESTING)
 
     # ---- unit：纯逻辑 / 合成数据，CI 默认执行 ----
     dh_register_test(dialog_module_test         "unit" 60)
+dh_register_test(conversation_session_lock_test "unit" 60)
     dh_register_test(lifecycle_safety_test      "unit" 60)
     dh_register_test(avatar_upload_test         "unit" 60)
     dh_register_test(ring_buffer_test           "unit" 30)
