@@ -4,6 +4,7 @@
 
 ## 架构
 
+- [系统架构设计文档（当前基线，含 2026-08 P0 修复契约与全链路验证记录）](architecture/system_architecture.md)
 - [架构总览](architecture/overview.md)
 - [第一阶段稳定性改造：生命周期、线程回收与配置一致性](architecture/phase1_stability_refactor.md)
 - [第二阶段改造：生命周期收敛、Worker Registry 与可观测性](architecture/phase2_lifecycle_observability_refactor.md)
