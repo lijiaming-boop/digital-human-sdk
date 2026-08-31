@@ -3,6 +3,7 @@
 #include <memory>
 #include <cstdint>
 #include <string>
+#include "digital_human/export.h"
 
 namespace digital_human {
 namespace core {
@@ -33,7 +34,7 @@ struct ScheduleResult {
 };
 
 /// @brief 帧调度统计信息
-struct FrameStats {
+struct DH_API FrameStats {
     int64_t total_frames        = 0;  ///< 总输入帧数
     int64_t frames_displayed    = 0;  ///< 实际显示帧数
     int64_t frames_dropped      = 0;  ///< 丢弃帧数
@@ -55,13 +56,14 @@ struct FrameStats {
  *   1. 计算期望 PTS = 上一显示帧 PTS + 帧间隔
  *   2. 比较实际 PTS 与期望 PTS
  *      - 实际 PTS 落后超过半帧间隔 → DROP
- *      - 实际 PTS 超前超过半帧间隔 → DUPLICATE
+ *      - 实际 PTS 超前超过半帧间隔 → DUPLICATE（重复上一帧，并把显示
+ *        时间轴重同步到该帧 PTS，保证后续帧重新收敛到 DISPLAY）
  *      - 否则 → DISPLAY
  *   3. EMA 平滑实际帧间隔，更新统计
  *
  * 采用 PIMPL（Pointer to Implementation）模式。
  */
-class FrameScheduler {
+class DH_API FrameScheduler {
 public:
     FrameScheduler();
     ~FrameScheduler();

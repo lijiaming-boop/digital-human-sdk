@@ -408,6 +408,15 @@ void RenderThread::Run() {
                             pkt.header.pts_ms,
                             impl_->frame_id_);
                     }
+                    // 重复帧同样要进入输出队列：DUPLICATE 的职责是填补输出
+                    // 时间轴的空隙，只回调不入队会让 GetOutputFrame 消费者
+                    // 饿死（ProcessFile 场景表现为 stall 超时）。
+                    if (impl_->output_queue_) {
+                        OutputFramePacket out;
+                        out.InheritHeader(pkt.header);
+                        out.payload = impl_->last_frame_;
+                        impl_->output_queue_->Push(std::move(out));
+                    }
                     impl_->frames_displayed_++;
                     impl_->frames_duplicated_++;
                 }

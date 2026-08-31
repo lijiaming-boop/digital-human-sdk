@@ -121,7 +121,6 @@ struct Pipeline::Impl {
     std::atomic<int64_t> max_av_match_error_us{0};
 
     // ---- 输入标记 ----
-    std::atomic<bool> audio_eos{false};
     std::atomic<bool> video_eos{false};
 
     // ---- 累计已处理的音频样本数（用于 GetAudioClockMs） ----
@@ -431,12 +430,11 @@ struct Pipeline::Impl {
                 MelFeaturePacket mel_pkt;
                 if (!ctx.mel_feature_queue.WaitAndPop(
                         mel_pkt, kPopTimeoutMs)) {
-                    // 上游已标记 EOS 且队列空 → 音频结束
-                    if (ctx.audio_eos.load(std::memory_order_acquire)
-                        && ctx.mel_feature_queue.Empty()) {
-                        audio_eos_ = true;
-                        break;
-                    }
+                    // 音频结束的唯一权威信号是 AudioProcessor 在排空全部
+                    // 积压后发出的 EOS 包。MarkAudioEOS 置位后 AudioProcessor
+                    // 仍可能有数百毫秒的原始音频/滑窗积压待转换，
+                    // "EOS 已标记 + 队列暂空"不足以断定结束，会抢跑截断
+                    // 尾部特征（表现为结尾帧冻结口型或流提前结束）。
                     continue;
                 }
                 if (mel_pkt.header.IsEOS() || mel_pkt.header.IsFatal()) {
@@ -718,7 +716,8 @@ void Pipeline::MarkAudioEOS() {
     if (!impl_->initialized.load(std::memory_order_acquire) || !impl_->audio_processor) {
         return;
     }
-    impl_->audio_eos.store(true, std::memory_order_release);
+    // 结束语义由 AudioProcessor 承担：它排空全部积压并发出 MelFeaturePacket::EOS，
+    // MatcherThread 以该包为音频结束的唯一权威信号。
     impl_->audio_processor->MarkEOS();
 }
 

@@ -43,7 +43,8 @@ struct FrameScheduler::Impl {
      * half_interval = frame_interval / 2
      *
      * pts < expected_pts - half_interval → DROP（滞后太多）
-     * pts > expected_pts + half_interval → DUPLICATE（超前太多）
+     * pts > expected_pts + half_interval → DUPLICATE（超前太多，重复上一帧
+     *   并把显示时间轴重同步到该帧的 PTS 槽位）
      * 否则 → DISPLAY
      */
     ScheduleResult doSchedule(int frame_id, double pts_ms) {
@@ -72,9 +73,13 @@ struct FrameScheduler::Impl {
             result.scheduled_pts_ms = last_displayed_pts_ms;
             frames_dropped++;
         } else if (diff > half_interval) {
-            // 视频超前超过半帧：重复上一帧
+            // 视频超前超过半帧：重复上一帧填补空隙。
+            // 显示时间轴必须重同步到输入帧的 PTS：若只推进一个帧间隔，
+            // 当输入节奏与帧间隔一致时 diff 恒定不变，调度器会永久停留在
+            // DUPLICATE —— 上一帧内容被无限重复，输出队列随之饥饿。
             result.action = FrameAction::DUPLICATE;
-            result.scheduled_pts_ms = last_displayed_pts_ms + frame_interval;
+            result.scheduled_pts_ms = pts_ms;
+            last_displayed_pts_ms = pts_ms;
             frames_duplicated++;
         } else {
             // 正常显示

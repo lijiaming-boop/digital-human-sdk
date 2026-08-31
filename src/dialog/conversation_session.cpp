@@ -365,9 +365,13 @@ struct ConversationSession::Impl {
             busy = false;
             current_task_id = 0;
             SetState(SessionState::FAILED);
+            auto callback = callbacks.on_turn_complete;
             lock.unlock();
-            cv.notify_all();
+            // 失败回合同样必须发出完成信号（事件顺序：on_error → on_turn_complete）：
+            // 依赖 on_turn_complete 串联下一轮的编排器否则会在一次失败后永久停摆。
+            if (callback) callback(completed_id);
             lock.lock();
+            cv.notify_all();
             return;
         }
         const bool was_interrupted = state == SessionState::INTERRUPTING;
@@ -873,15 +877,28 @@ StopResult ConversationSession::Stop(bool drain,
     if (impl_->audio_thread.joinable()) impl_->audio_thread.join();
     if (impl_->video_thread.joinable()) impl_->video_thread.join();
     impl_->media_sink.Finish();
-    // 回收 ASR/VAD（P1-3.10c）：工作线程退出后再停止，避免回调竞争
-    if (impl_->streaming_vad && impl_->vad_started) {
-        impl_->streaming_vad->Stop();
-        impl_->vad_started = false;
+    // 回收 ASR/VAD（P1-3.10c）：工作线程退出后再停止，避免回调竞争。
+    // 指针与启动标志在锁内快照并清除标志，Stop 调用在锁外执行
+    // （可能阻塞或触发回调），否则与 PushUserAudio/Set*Client 构成数据竞争。
+    audio::IStreamingVAD* vad_to_stop = nullptr;
+    IASRClient* asr_to_stop = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(impl_->mutex);
+        if (impl_->streaming_vad && impl_->vad_started) {
+            vad_to_stop = impl_->streaming_vad;
+            impl_->vad_started = false;
+        }
+        if (impl_->asr_client && impl_->asr_started) {
+            asr_to_stop = impl_->asr_client;
+            impl_->asr_started = false;
+        }
     }
-    if (impl_->asr_client && impl_->asr_started) {
+    if (vad_to_stop) {
+        vad_to_stop->Stop();
+    }
+    if (asr_to_stop) {
         std::string asr_err;
-        impl_->asr_client->Stop(asr_err);
-        impl_->asr_started = false;
+        asr_to_stop->Stop(asr_err);
     }
     {
         std::lock_guard<std::mutex> lock(impl_->mutex);
@@ -906,56 +923,93 @@ SessionState ConversationSession::State() const {
 }
 
 void ConversationSession::SetASRClient(IASRClient* client) {
-    std::lock_guard<std::mutex> lock(impl_->mutex);
-    // 解除旧绑定：若已 Start 则先 Stop
-    if (impl_->asr_client && impl_->asr_started) {
-        std::string err;
-        impl_->asr_client->Stop(err);
+    IASRClient* old = nullptr;
+    bool old_started = false;
+    bool should_start = false;
+    {
+        std::lock_guard<std::mutex> lock(impl_->mutex);
+        old = impl_->asr_client;
+        old_started = impl_->asr_started;
+        impl_->asr_client = client;
         impl_->asr_started = false;
+        should_start = client && impl_->started && !impl_->stopping;
     }
-    impl_->asr_client = client;
-    if (client && impl_->started && !impl_->stopping) {
-        auto on_transcript = [this](const Transcript& t) {
-            // ASR 最终结果可作为新 turn 的用户输入
-            if (t.is_final && !t.text.empty()) {
-                // 通过 callbacks 通知上层，由上层决定是否 SubmitUserText
-                // 此处不直接调用 SubmitUserText，避免在 ASR 回调线程中重入
-                auto cb = impl_->callbacks.on_text_delta;
-                // ASR 结果暂不自动提交，留给上层处理
-                (void)cb;
-            }
-        };
-        auto cancelled = [this]() {
-            std::lock_guard<std::mutex> lk(impl_->mutex);
-            return impl_->stopping;
-        };
+    // Start/Stop 必须在锁外调用：ASR 实现可能同步触发回调（如 cancelled），
+    // 回调会重新获取会话互斥量，持锁调用会自死锁。
+    if (old && old_started) {
         std::string err;
-        impl_->asr_started = client->Start(on_transcript, cancelled, err);
-        if (!impl_->asr_started) {
-            DH_LOG_WARN("dialog.session")
-                << "ASR Start failed: " << err;
+        old->Stop(err);
+    }
+    if (!should_start) return;
+    auto on_transcript = [this](const Transcript& t) {
+        // ASR 最终结果可作为新 turn 的用户输入
+        if (t.is_final && !t.text.empty()) {
+            // 通过 callbacks 通知上层，由上层决定是否 SubmitUserText
+            // 此处不直接调用 SubmitUserText，避免在 ASR 回调线程中重入
+            auto cb = impl_->callbacks.on_text_delta;
+            // ASR 结果暂不自动提交，留给上层处理
+            (void)cb;
         }
+    };
+    auto cancelled = [this]() {
+        std::lock_guard<std::mutex> lk(impl_->mutex);
+        return impl_->stopping;
+    };
+    std::string err;
+    if (!client->Start(on_transcript, cancelled, err)) {
+        DH_LOG_WARN("dialog.session")
+            << "ASR Start failed: " << err;
+        return;
+    }
+    bool keep = false;
+    {
+        std::lock_guard<std::mutex> lock(impl_->mutex);
+        keep = impl_->started && !impl_->stopping;
+        impl_->asr_started = keep;
+    }
+    if (!keep) {
+        // Start 期间会话已 Stop：回收刚启动的客户端，避免泄漏。
+        std::string stop_err;
+        client->Stop(stop_err);
     }
 }
 
 void ConversationSession::SetStreamingVAD(audio::IStreamingVAD* vad) {
-    std::lock_guard<std::mutex> lock(impl_->mutex);
-    // 解除旧绑定：若已 Start 则先 Stop
-    if (impl_->streaming_vad && impl_->vad_started) {
-        impl_->streaming_vad->Stop();
+    audio::IStreamingVAD* old = nullptr;
+    bool old_started = false;
+    bool should_start = false;
+    {
+        std::lock_guard<std::mutex> lock(impl_->mutex);
+        old = impl_->streaming_vad;
+        old_started = impl_->vad_started;
+        impl_->streaming_vad = vad;
         impl_->vad_started = false;
+        should_start = vad && impl_->started && !impl_->stopping;
     }
-    impl_->streaming_vad = vad;
-    if (vad && impl_->started && !impl_->stopping) {
-        auto on_event = [this](audio::VADEvent event) {
-            if (event == audio::VADEvent::VoiceStart) {
-                impl_->OnBargeIn();
-            }
-        };
-        impl_->vad_started = vad->Start(on_event);
-        if (!impl_->vad_started) {
-            DH_LOG_WARN("dialog.session") << "VAD Start failed";
+    // Start/Stop 必须在锁外调用：VAD 回调（VoiceStart → OnBargeIn）会重新
+    // 获取会话互斥量，持锁调用会自死锁。
+    if (old && old_started) {
+        old->Stop();
+    }
+    if (!should_start) return;
+    auto on_event = [this](audio::VADEvent event) {
+        if (event == audio::VADEvent::VoiceStart) {
+            impl_->OnBargeIn();
         }
+    };
+    if (!vad->Start(on_event)) {
+        DH_LOG_WARN("dialog.session") << "VAD Start failed";
+        return;
+    }
+    bool keep = false;
+    {
+        std::lock_guard<std::mutex> lock(impl_->mutex);
+        keep = impl_->started && !impl_->stopping;
+        impl_->vad_started = keep;
+    }
+    if (!keep) {
+        // Start 期间会话已 Stop：回收刚启动的 VAD，避免泄漏。
+        vad->Stop();
     }
 }
 
@@ -966,16 +1020,25 @@ bool ConversationSession::PushUserAudio(const float* samples,
         error = "PushUserAudio: null samples or zero count";
         return false;
     }
-    // 不持锁地转发音频，避免 ASR/VAD 内部处理阻塞会话线程
-    if (impl_->asr_client && impl_->asr_started) {
+    // 锁内只做指针快照，锁外转发音频。asr_client/streaming_vad 及启动标志
+    // 是受 mutex 保护的普通字段，无锁读取与 SetASRClient/SetStreamingVAD/Stop
+    // 构成数据竞争；而全程持锁调用 ASR/VAD 又会让其内部处理阻塞会话状态。
+    IASRClient* asr = nullptr;
+    audio::IStreamingVAD* vad = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(impl_->mutex);
+        if (impl_->asr_started) asr = impl_->asr_client;
+        if (impl_->vad_started) vad = impl_->streaming_vad;
+    }
+    if (asr) {
         std::string asr_err;
-        if (!impl_->asr_client->PushAudio(samples, sample_count, asr_err)) {
+        if (!asr->PushAudio(samples, sample_count, asr_err)) {
             DH_LOG_WARN("dialog.session")
                 << "ASR PushAudio failed: " << asr_err;
         }
     }
-    if (impl_->streaming_vad && impl_->vad_started) {
-        impl_->streaming_vad->PushAudio(samples, sample_count);
+    if (vad) {
+        vad->PushAudio(samples, sample_count);
     }
     return true;
 }

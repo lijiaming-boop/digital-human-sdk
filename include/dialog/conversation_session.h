@@ -33,7 +33,7 @@ public:
     virtual void Finish() = 0;
 };
 
-class SDKDigitalHumanSink final : public IDigitalHumanSink {
+class DH_API SDKDigitalHumanSink final : public IDigitalHumanSink {
 public:
     explicit SDKDigitalHumanSink(DigitalHumanSDK& sdk);
 
@@ -90,6 +90,8 @@ struct ConversationCallbacks {
     // quickly and must not call Stop() synchronously from inside the callback.
     std::function<void(uint64_t, const std::string&)> on_text_delta;
     std::function<void(uint64_t, const std::string&)> on_reply_ready;
+    /// 每个 turn 结束时触发一次（含被打断与失败的 turn；失败时在 on_error
+    /// 之后触发）。依赖它串联下一轮的编排器不会因某轮失败而停摆。
     std::function<void(uint64_t)> on_turn_complete;
     std::function<void(uint64_t, const std::string&)> on_error;
 };
